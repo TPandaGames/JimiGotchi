@@ -1,0 +1,2959 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Jimothy-Gotchi: Raccoon Virtual Pet</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- PeerJS for Local Network / WebRTC P2P Alley Link -->
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <!-- Google Fonts: VT323 & Press Start 2P -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      /* Theme Defaults */
+      --lcd-bg: #8ca374;
+      --lcd-pixel: #1c2718;
+      --lcd-ghost: #7f9568;
+      --lcd-ui: rgba(28, 39, 24, 0.3);
+
+      --shell-bg-1: #2d6b52;
+      --shell-bg-2: #1e4a38;
+      --shell-bg-3: #122c22;
+      --shell-border: #0f251c;
+      --shell-radius: 12px 12px 40px 40px; /* Gameboy Shape by default now */
+      --shell-bezel: #1b251e;
+      --shell-bezel-border: #0b1712;
+      --brand-text: #6ee7b7;
+    }
+
+    body {
+      background: radial-gradient(circle at 50% 20%, #1a221f 0%, #0d1210 100%);
+      font-family: 'Press Start 2P', monospace;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+      overscroll-behavior: none;
+    }
+
+    .lcd-screen {
+      background-color: var(--lcd-bg);
+      color: var(--lcd-pixel);
+      box-shadow: inset 3px 3px 10px rgba(0,0,0,0.5), inset -2px -2px 6px rgba(255,255,255,0.25);
+      position: relative;
+      transition: background-color 0.3s ease;
+    }
+
+    .lcd-screen.ar-active {
+      background-color: transparent !important;
+    }
+    .lcd-screen.ar-active .ar-hud-panel {
+      background-color: color-mix(in srgb, var(--lcd-bg) 78%, transparent);
+      backdrop-filter: blur(2px);
+      border-radius: 4px;
+      padding: 2px 4px;
+    }
+    .lcd-screen.ar-active #jimothyGraphic,
+    .lcd-screen.ar-active #possumPet,
+    .lcd-screen.ar-active #trashPalaceGroup {
+      filter: drop-shadow(0 0 3px var(--lcd-bg)) drop-shadow(0 0 1px var(--lcd-bg));
+    }
+    .ar-sim-bg {
+      background:
+        linear-gradient(rgba(16, 185, 129, 0.12) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(16, 185, 129, 0.12) 1px, transparent 1px),
+        radial-gradient(circle at 50% 60%, #1e293b 0%, #090d16 100%) !important;
+      background-size: 16px 16px, 16px 16px, 100% 100% !important;
+    }
+
+    .lcd-screen::before {
+      content: " ";
+      position: absolute;
+      top: 0; left: 0; bottom: 0; right: 0;
+      background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.12) 50%), 
+                  linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
+      background-size: 100% 3px, 4px 100%;
+      pointer-events: none;
+      opacity: 0.7;
+      z-index: 20;
+    }
+
+    .toy-shell {
+      background: radial-gradient(circle at 35% 25%, var(--shell-bg-1) 0%, var(--shell-bg-2) 50%, var(--shell-bg-3) 100%);
+      border: 8px solid var(--shell-border);
+      border-radius: var(--shell-radius);
+      box-shadow: 0 15px 35px rgba(0, 0, 0, 0.8), inset 0 6px 12px rgba(255, 255, 255, 0.18), inset 0 -8px 16px rgba(0, 0, 0, 0.6);
+      transition: border-radius 0.4s ease, background 0.4s ease, border-color 0.4s ease;
+    }
+
+    /* Pixel Art Animations */
+    @keyframes raccoonIdle {
+      0%, 100% { transform: translateY(0px) scale(1); }
+      50% { transform: translateY(-4px) scale(1.02); }
+    }
+    .idle-anim { animation: raccoonIdle 1.1s steps(2, start) infinite; }
+
+    @keyframes hissShake {
+      0%, 100% { transform: translate(0, 0); }
+      20% { transform: translate(-3px, 2px); }
+      40% { transform: translate(3px, -2px); }
+      60% { transform: translate(-3px, -2px); }
+      80% { transform: translate(3px, 2px); }
+    }
+    .shake-anim { animation: hissShake 0.15s infinite; }
+
+    @keyframes scurryBuild {
+      0%, 100% { transform: translate(0, 0) scale(1); }
+      12% { transform: translate(-12px, -4px) scale(1.05) rotate(-3deg); }
+      25% { transform: translate(-24px, 0) scale(0.95) rotate(0deg); }
+      37% { transform: translate(-12px, -4px) scale(1.02) rotate(3deg); }
+      50% { transform: translate(0, 0) scale(0.95) rotate(0deg); }
+      62% { transform: translate(12px, -4px) scale(1.05) rotate(-3deg); }
+      75% { transform: translate(24px, 0) scale(0.95) rotate(0deg); }
+      87% { transform: translate(12px, -4px) scale(1.02) rotate(3deg); }
+    }
+    .scurry-anim { animation: scurryBuild 0.45s infinite; }
+
+    @keyframes trashRaid {
+      0% { transform: rotate(0deg) translateX(0); }
+      25% { transform: rotate(-8deg) translateX(-6px); }
+      75% { transform: rotate(10deg) translateX(6px); }
+      100% { transform: rotate(0deg) translateX(0); }
+    }
+    .raid-anim { animation: trashRaid 0.35s steps(2, start) infinite; }
+
+    @keyframes zzzFloat {
+      0%, 100% { transform: translateY(0px); opacity: 0.5; }
+      50% { transform: translateY(-4px); opacity: 1; }
+    }
+
+    @keyframes lcdGlitch {
+      0% { transform: translate(0) skew(0deg); filter: hue-rotate(0deg); }
+      20% { transform: translate(-2px, 1px) skew(-5deg); filter: hue-rotate(90deg) invert(0.2); }
+      40% { transform: translate(2px, -1px) skew(5deg); filter: hue-rotate(-90deg) invert(0); }
+      60% { transform: translate(-1px, 2px) skew(0deg); filter: hue-rotate(180deg) invert(0.5); }
+      80% { transform: translate(1px, -2px) skew(2deg); filter: hue-rotate(45deg); }
+      100% { transform: translate(0) skew(0deg); filter: hue-rotate(0deg); }
+    }
+    .glitch-effect { animation: lcdGlitch 0.3s infinite; }
+
+    @keyframes splatDrip {
+      0% { transform: scale(0.5); opacity: 1; }
+      10% { transform: scale(2.5); opacity: 1; }
+      100% { transform: scale(2.5) translateY(30px); opacity: 0; }
+    }
+    .splat-drip { animation: splatDrip 3.5s forwards; }
+
+    @keyframes possumPeek {
+      0%, 80%, 100% { transform: translateY(15px); }
+      85%, 95% { transform: translateY(0px); }
+      88%, 92% { transform: translateY(-2px); }
+    }
+    .possum-anim { animation: possumPeek 12s cubic-bezier(0.4, 0, 0.2, 1) infinite; }
+
+    /* Environment Animations */
+    @keyframes cloudPan {
+      from { transform: translateX(-40px); }
+      to { transform: translateX(140px); }
+    }
+    .cloud-anim-1 { animation: cloudPan 45s linear infinite; }
+    .cloud-anim-2 { animation: cloudPan 65s linear infinite 15s; }
+
+    @keyframes twinkleStar {
+      0%, 100% { opacity: 0.1; }
+      50% { opacity: 0.9; }
+    }
+    .twinkle-anim { animation: twinkleStar 3s ease-in-out infinite; }
+
+    @keyframes flickerLight {
+      0%, 100% { opacity: 0.1; }
+      5% { opacity: 0.15; }
+      10% { opacity: 0.05; }
+      15% { opacity: 0.1; }
+      50% { opacity: 0.1; }
+      55% { opacity: 0.15; }
+    }
+    .flicker-anim { animation: flickerLight 6s infinite; }
+
+    .pixelated {
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+    }
+
+    /* Controller & Keyboard Visual Button Press States */
+    #btnA.btn-pressed, #btnB.btn-pressed {
+      border-bottom-width: 0px !important;
+      transform: translateY(4px) !important;
+      background-color: #be123c !important;
+    }
+    #btnSelect.btn-pressed, #btnStart.btn-pressed, #btnMenu.btn-pressed {
+      transform: scale(0.93) !important;
+      filter: brightness(0.8);
+    }
+    #dpadUp.btn-pressed, #dpadDown.btn-pressed, #dpadLeft.btn-pressed, #dpadRight.btn-pressed {
+      background-color: rgba(255, 255, 255, 0.22) !important;
+    }
+  </style>
+</head>
+<body class="h-[100dvh] w-screen flex flex-col items-center justify-center p-1.5 sm:p-4 select-none text-slate-100 overflow-hidden">
+
+  <div class="relative w-full h-full sm:h-[95dvh] max-w-[560px] flex flex-col items-center justify-center">
+    
+    <!-- Handheld Body Container -->
+    <div class="toy-shell w-full h-full p-3 sm:p-6 relative z-10 flex flex-col items-center justify-between overflow-hidden">
+      
+      <!-- Top Brand Header -->
+      <div class="w-full flex items-center justify-between px-1 sm:px-2 pt-0.5 pb-1.5 sm:pb-3 shrink-0">
+        <div class="flex items-center space-x-1">
+          <span class="inline-block w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full animate-pulse shadow-[0_0_8px_var(--brand-text)]" style="background-color: var(--brand-text);"></span>
+          <span class="text-[9px] sm:text-xs tracking-wider font-bold drop-shadow" style="color: var(--brand-text);">BE Bandit-Pet</span>
+        </div>
+        <div class="text-[9px] sm:text-xs tracking-widest font-extrabold uppercase" style="color: var(--brand-text);">
+          JIMOTHY 2000
+        </div>
+      </div>
+
+      <!-- Settings Icon Row -->
+      <div class="w-full flex justify-end items-center space-x-1.5 sm:space-x-2 mb-1.5 sm:mb-2 px-1 sm:px-2 shrink-0">
+        <span id="gamepadStatus" class="text-xs sm:text-sm p-1 opacity-30 transition-opacity cursor-pointer" style="color: var(--brand-text);" title="Controller Disconnected (Press any controller button)">🎮</span>
+        <button id="alleyLinkBtn" class="text-xs sm:text-sm p-1 transition hover:text-white active:scale-90 relative" style="color: var(--brand-text);" title="Alley Link (Nearby Jimothys)">📡<span id="alleyLinkDot" class="hidden absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span></button>
+        <button id="arToggleBtn" class="text-xs sm:text-sm p-1 transition hover:text-white active:scale-90" style="color: var(--brand-text);" title="Toggle AR Camera Mode">📷</button>
+        <button id="deviceToggleBtn" class="text-xs sm:text-sm p-1 transition hover:text-white active:scale-90" style="color: var(--brand-text);" title="Change Device Shape (LT)">📱</button>
+        <button id="colorToggleBtn" class="text-xs sm:text-sm p-1 transition hover:text-white active:scale-90" style="color: var(--brand-text);" title="Change Shell Color (LB)">🎨</button>
+        <button id="lcdToggleBtn" class="text-xs sm:text-sm p-1 transition hover:text-white active:scale-90" style="color: var(--brand-text);" title="Change Screen Backlight (RB)">💡</button>
+        <button id="webhookToggleBtn" class="text-xs sm:text-sm p-1 transition hover:text-white active:scale-90" style="color: var(--brand-text);" title="Set Webhook">💬</button>
+        <button id="notifToggleBtn" class="text-xs sm:text-sm p-1 transition hover:text-white active:scale-90" style="color: var(--brand-text);" title="Toggle Notifications">🔕</button>
+        <button id="soundToggleBtn" class="text-xs sm:text-sm p-1 transition hover:text-white active:scale-90" style="color: var(--brand-text);" title="Toggle Sound (RT)">🔊</button>
+      </div>
+
+      <div class="w-full flex-1 flex flex-col min-h-[180px] p-2 sm:p-3.5 rounded-2xl shadow-inner border-4" style="background-color: var(--shell-bezel); border-color: var(--shell-bezel-border);">
+        
+        <!-- Gameboy Top Bezel Text -->
+        <div class="w-full flex justify-center mb-0.5 sm:mb-1 shrink-0">
+            <span class="text-[7px] sm:text-[8px] font-sans tracking-[0.2em] opacity-70" style="color: var(--shell-bg-3);">DOT MATRIX WITH STEREO SOUND</span>
+        </div>
+
+        <div id="lcdScreen" class="lcd-screen w-full flex-1 rounded-lg p-2 sm:p-2.5 flex flex-col justify-between overflow-hidden" style="color: var(--lcd-pixel);">
+          <!-- Live AR Camera Feed -->
+          <video id="arVideo" autoplay playsinline muted class="absolute inset-0 w-full h-full object-cover z-0 hidden pointer-events-none"></video>
+          <button id="arFlipBtn" class="absolute top-8 right-2 z-30 hidden px-1.5 py-0.5 rounded text-[7px] font-bold border shadow cursor-pointer active:scale-95" style="background-color: var(--lcd-bg); color: var(--lcd-pixel); border-color: var(--lcd-pixel);" title="Switch Front/Back Camera">🔄 CAM</button>
+          
+          <!-- Screen Splat & Crack Overlays -->
+          <div id="screenSplat" class="absolute inset-0 z-30 hidden items-center justify-center pointer-events-none">
+            <div id="splatGraphic" class="text-5xl sm:text-7xl drop-shadow-lg transition-all duration-1000 origin-center">🍅</div>
+          </div>
+          
+          <div id="screenCrack" class="absolute inset-0 z-30 hidden pointer-events-none opacity-80">
+             <svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none">
+                 <path d="M50 50 L20 10 M50 50 L80 15 M50 50 L10 60 M50 50 L90 70 M50 50 L40 90 M50 50 L70 95 M40 40 L60 60 M30 50 L70 40 M45 60 L60 35" stroke="rgba(255,255,255,0.6)" stroke-width="1.5" fill="none" />
+                 <path d="M50 50 L25 15 M50 50 L85 20 M50 50 L15 65 M50 50 L85 65 M50 50 L35 85" stroke="rgba(0,0,0,0.3)" stroke-width="0.5" fill="none" />
+             </svg>
+          </div>
+
+          <!-- On-Screen Interactive Menu -->
+          <div id="menuScreen" class="absolute inset-0 z-40 hidden flex-col p-2" style="background-color: var(--lcd-bg);">
+            <div class="flex justify-between items-center text-[9px] sm:text-[10px] font-bold border-b pb-1 mb-1" style="border-color: var(--lcd-ui);">
+              <span>MAIN MENU</span>
+              <span class="animate-pulse opacity-70">▼/▲</span>
+            </div>
+            <div id="menuList" class="flex flex-col space-y-1 text-[8px] sm:text-[9px] font-mono mt-1">
+              <!-- JS populated -->
+            </div>
+          </div>
+
+          <!-- Inventory Overlay -->
+          <div id="inventoryScreen" class="absolute inset-0 z-40 hidden flex-col p-2" style="background-color: var(--lcd-bg);">
+            <div class="flex justify-between items-center text-[9px] sm:text-[10px] font-bold border-b pb-1 mb-1 shrink-0" style="border-color: var(--lcd-ui);">
+              <span>INVENTORY</span>
+              <span class="animate-pulse opacity-70">B:EXIT</span>
+            </div>
+            <div id="inventoryGrid" class="grid grid-cols-4 gap-1.5 flex-1 content-start overflow-y-auto">
+              <!-- Populated via JS -->
+            </div>
+            <div id="inventoryDesc" class="h-8 mt-1 text-[7px] sm:text-[8px] font-mono border-t pt-1 shrink-0 leading-tight" style="border-color: var(--lcd-ui);">
+              BAG IS EMPTY
+            </div>
+          </div>
+
+          <!-- Marketplace Overlay -->
+          <div id="marketplaceScreen" class="absolute inset-0 z-40 hidden flex-col p-2" style="background-color: var(--lcd-bg);">
+            <div class="flex justify-between items-center text-[9px] sm:text-[10px] font-bold border-b pb-1 mb-1 shrink-0" style="border-color: var(--lcd-ui);">
+              <span>🛒 TRASH MARKET</span>
+              <span id="marketCaps" class="font-mono">✨ CAPS: 3</span>
+            </div>
+            <div class="grid grid-cols-2 gap-1 mb-1 shrink-0 text-[7px] sm:text-[8px] font-bold text-center">
+              <button id="marketTabTrash" class="py-0.5 rounded border cursor-pointer transition-colors">🗑️ TRASH & LOOT</button>
+              <button id="marketTabPalace" class="py-0.5 rounded border cursor-pointer transition-colors">🏰 PALACE PARTS</button>
+            </div>
+            <div id="marketList" class="flex-1 flex flex-col space-y-1 overflow-y-auto text-[7px] sm:text-[8px] font-mono pr-0.5">
+              <!-- Populated via JS -->
+            </div>
+            <div id="marketDesc" class="h-9 mt-1 text-[7px] sm:text-[8px] font-mono border-t pt-1 leading-tight shrink-0 flex flex-col justify-between" style="border-color: var(--lcd-ui);">
+              <div id="marketDescText" class="truncate">Select an item to buy</div>
+              <div class="opacity-75 text-[6px] sm:text-[7px] text-center">[A] BUY  [◀/▶] TAB  [▲/▼] MOVE  [B] EXIT</div>
+            </div>
+          </div>
+
+          <!-- Alley Link (Nearby Multiplayer) Overlay -->
+          <div id="alleyLinkScreen" class="absolute inset-0 z-40 hidden flex-col p-2" style="background-color: var(--lcd-bg);">
+            <div class="flex justify-between items-center text-[9px] sm:text-[10px] font-bold border-b pb-1 mb-1 shrink-0" style="border-color: var(--lcd-ui);">
+              <span>📡 ALLEY LINK</span>
+              <span id="alleyRoomBadge" class="font-mono text-[8px]">CODE: ALLEY-1</span>
+            </div>
+            <div id="alleyPeerStatus" class="text-[7px] sm:text-[8px] font-mono px-1.5 py-1 rounded border mb-1 shrink-0 flex justify-between items-center" style="border-color: var(--lcd-ui); background-color: var(--lcd-ghost);">
+              <span id="alleyPeerText" class="truncate">SCANNING FOR JIMOTHYS...</span>
+              <span id="alleyPeerCount" class="font-bold ml-1 shrink-0">0 LINKED</span>
+            </div>
+            <div id="alleyActionList" class="flex-1 flex flex-col space-y-1 overflow-y-auto text-[8px] sm:text-[9px] font-mono">
+              <!-- Populated via JS -->
+            </div>
+            <div class="h-7 mt-1 text-[6px] sm:text-[7px] font-mono border-t pt-1 text-center leading-tight shrink-0 flex items-center justify-center" style="border-color: var(--lcd-ui);">
+              [A] SELECT   [▲/▼] MOVE   [B] EXIT
+            </div>
+          </div>
+
+          <!-- Top Status Icons -->
+          <div class="relative z-10 ar-hud-panel flex justify-between items-center text-[8px] sm:text-[9px] border-b pb-1 font-mono" style="border-color: var(--lcd-ui);">
+            <span id="rankBadge" class="font-bold truncate max-w-[170px]">KIT BANDIT (AGE 1)</span>
+            <div class="flex items-center space-x-1.5">
+              <span id="timeClock" class="font-mono">03:14 AM</span>
+              <span id="statusMoon">🌙</span>
+            </div>
+          </div>
+
+          <!-- Meters Grid (Compact Pixel Indicators) -->
+          <div class="relative z-10 ar-hud-panel grid grid-cols-2 gap-x-2 gap-y-1 text-[8px] sm:text-[9px] my-1 border-b pb-1 shrink-0 font-mono" style="border-color: var(--lcd-ui);">
+            <div>
+              <div class="flex justify-between"><span>TRASH:</span><span id="hungerNum">80%</span></div>
+              <div class="w-full h-1.5 sm:h-2 rounded-[2px] p-[1px]" style="background-color: var(--lcd-ghost);"><div id="hungerBar" class="h-full rounded-[1px] transition-all" style="background-color: var(--lcd-pixel); width: 80%;"></div></div>
+            </div>
+            <div>
+              <div class="flex justify-between"><span>CHAOS:</span><span id="chaosNum">45%</span></div>
+              <div class="w-full h-1.5 sm:h-2 rounded-[2px] p-[1px]" style="background-color: var(--lcd-ghost);"><div id="chaosBar" class="h-full rounded-[1px] transition-all" style="background-color: var(--lcd-pixel); width: 45%;"></div></div>
+            </div>
+            <div>
+              <div class="flex justify-between"><span>GREASE:</span><span id="greaseNum">60%</span></div>
+              <div class="w-full h-1.5 sm:h-2 rounded-[2px] p-[1px]" style="background-color: var(--lcd-ghost);"><div id="greaseBar" class="h-full rounded-[1px] transition-all" style="background-color: var(--lcd-pixel); width: 60%;"></div></div>
+            </div>
+            <div>
+              <div class="flex justify-between"><span>ENERGY:</span><span id="energyNum">70%</span></div>
+              <div class="w-full h-1.5 sm:h-2 rounded-[2px] p-[1px]" style="background-color: var(--lcd-ghost);"><div id="energyBar" class="h-full rounded-[1px] transition-all" style="background-color: var(--lcd-pixel); width: 70%;"></div></div>
+            </div>
+          </div>
+
+          <!-- Main Stage: Jimothy Pixel Character Canvas / Sprite -->
+          <div id="stageArea" class="relative z-10 flex-1 flex flex-col items-center justify-center min-h-[100px] overflow-hidden">
+
+            <!-- Static LCD Printed Background -->
+            <svg id="stageBackground" class="absolute inset-0 w-full h-full pixelated z-0" viewBox="0 0 120 70" preserveAspectRatio="none">
+              <g id="staticSceneryGroup" style="fill: var(--lcd-pixel); stroke: var(--lcd-pixel);" opacity="0.18">
+                <!-- Left side: Brick Building -->
+                <rect x="0" y="0" width="35" height="70" style="fill: var(--lcd-pixel);" opacity="0.1" stroke="none" />
+                <line x1="35" y1="0" x2="35" y2="70" stroke-width="1.5" />
+                
+                <!-- Window -->
+                <rect x="6" y="10" width="20" height="26" fill="none" stroke-width="1.5" />
+                <line x1="6" y1="23" x2="26" y2="23" stroke-width="1" />
+                <line x1="16" y1="10" x2="16" y2="36" stroke-width="1" />
+                <rect x="4" y="36" width="24" height="2" stroke="none" />
+                
+                <!-- Brick patterns -->
+                <line x1="0" y1="46" x2="12" y2="46" stroke-width="1" />
+                <line x1="12" y1="46" x2="12" y2="52" stroke-width="1" />
+                <line x1="20" y1="52" x2="35" y2="52" stroke-width="1" />
+                <line x1="20" y1="52" x2="20" y2="58" stroke-width="1" />
+                <line x1="0" y1="60" x2="15" y2="60" stroke-width="1" />
+                <line x1="15" y1="60" x2="15" y2="66" stroke-width="1" />
+
+                <!-- Fence -->
+                <rect x="85" y="35" width="6" height="35" fill="none" stroke-width="1" />
+                <polygon points="85,35 88,30 91,35" fill="none" stroke-width="1" />
+                <rect x="95" y="28" width="6" height="42" fill="none" stroke-width="1" />
+                <polygon points="95,28 98,23 101,28" fill="none" stroke-width="1" />
+                <line x1="70" y1="45" x2="120" y2="45" stroke-width="1.5" />
+                <line x1="70" y1="58" x2="120" y2="58" stroke-width="1.5" />
+
+                <!-- Dynamic Sky Elements: Clouds, Stars, Sun/Moon -->
+                <g class="cloud-anim-1" style="fill: var(--lcd-pixel); opacity: 0.15;">
+                  <rect x="0" y="8" width="15" height="4" rx="2" />
+                  <circle cx="5" cy="7" r="3" />
+                  <circle cx="10" cy="8" r="2.5" />
+                </g>
+                <g class="cloud-anim-2" style="fill: var(--lcd-pixel); opacity: 0.1;">
+                  <rect x="-30" y="15" width="20" height="5" rx="2.5" />
+                  <circle cx="-25" cy="14" r="3" />
+                  <circle cx="-18" cy="13" r="4" />
+                  <circle cx="-13" cy="15" r="2" />
+                </g>
+
+                <g id="starGroup" style="display: none; fill: var(--lcd-pixel);">
+                   <circle cx="25" cy="10" r="0.5" class="twinkle-anim" style="animation-delay: 0s;" />
+                   <circle cx="55" cy="6" r="0.5" class="twinkle-anim" style="animation-delay: 1.5s;" />
+                   <circle cx="85" cy="12" r="0.5" class="twinkle-anim" style="animation-delay: 0.7s;" />
+                   <circle cx="110" cy="5" r="0.5" class="twinkle-anim" style="animation-delay: 2s;" />
+                </g>
+
+                <!-- Celestial Body (Moves dynamically via JS) -->
+                <g id="celestialBody" transform="translate(100, 15)"></g>
+
+                <!-- Powerlines -->
+                <path d="M 35,5 Q 75,20 120,0" fill="none" stroke-width="0.75" />
+                <path d="M 35,15 Q 75,30 120,10" fill="none" stroke-width="0.75" />
+
+                <!-- Street Lamp -->
+                <line x1="72" y1="45" x2="72" y2="25" stroke-width="1.5" stroke="var(--lcd-pixel)"/>
+                <path d="M 72,25 Q 75,20 80,22" fill="none" stroke-width="1" stroke="var(--lcd-pixel)"/>
+                <polygon points="78,21 82,23 83,25 77,25" fill="var(--lcd-pixel)"/>
+                <!-- The light beam (Night only) -->
+                <g id="streetLightBeam" class="flicker-anim" style="fill: var(--lcd-pixel); opacity: 0.1;">
+                  <polygon points="80,25 65,45 95,45" />
+                </g>
+
+                <!-- Distant Dumpster -->
+                <path d="M 42,45 L 68,45 L 68,65 L 42,65 Z" fill="none" stroke-width="1" />
+                <line x1="40" y1="45" x2="70" y2="45" stroke-width="1.5" />
+                <line x1="0" y1="65" x2="120" y2="65" stroke-width="1" />
+                <line x1="0" y1="68" x2="120" y2="68" stroke-width="2" />
+              </g>
+              <g id="trashPalaceGroup"></g>
+            </svg>
+
+            <!-- Reaction Bubble -->
+            <div id="speechBubble" class="absolute top-0 px-2 py-0.5 text-[8px] sm:text-[10px] rounded border opacity-0 transition-opacity duration-200 z-20 max-w-[200px] text-center" style="background-color: var(--lcd-pixel); color: var(--lcd-bg); border-color: var(--lcd-pixel);">
+              *SCUTTLE*
+            </div>
+
+            <!-- Dream Bubble -->
+            <div id="dreamBubble" class="absolute top-1 right-2 hidden flex-col items-center justify-center p-1 border rounded z-20 shadow-sm" style="background-color: var(--lcd-bg); border-color: var(--lcd-pixel);">
+              <span id="dreamIcon" class="text-sm sm:text-base pixelated">💭</span>
+            </div>
+
+            <!-- Jimothy Vector Graphic -->
+            <div id="jimothyGraphic" class="relative z-10 idle-anim cursor-pointer transition-transform duration-200 h-[45%] min-h-[70px] max-h-[160px] flex items-end">
+              <svg id="jimothySvg" class="h-full w-auto pixelated" viewBox="0 0 100 90" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <!-- Tail -->
+                <path d="M 68 62 C 82 62, 94 56, 92 42 C 90 34, 80 34, 76 40 C 74 46, 75 52, 68 56 Z" style="fill: var(--lcd-pixel);" />
+                <path d="M 77 45 C 80 43, 85 45, 85 49" style="stroke: var(--lcd-bg);" stroke-width="3" stroke-linecap="round" />
+                <path d="M 72 52 C 78 50, 83 54, 83 57" style="stroke: var(--lcd-bg);" stroke-width="3" stroke-linecap="round" />
+                
+                <!-- Body -->
+                <ellipse cx="50" cy="56" rx="22" ry="18" style="fill: var(--lcd-pixel);" />
+                <ellipse cx="49" cy="58" rx="14" ry="11" style="fill: var(--lcd-ghost);" />
+                
+                <!-- Paws (Moved here so the sleeping bag can cover them properly) -->
+                <ellipse cx="38" cy="56" rx="4" ry="3" style="fill: var(--lcd-pixel);" />
+                <ellipse cx="62" cy="56" rx="4" ry="3" style="fill: var(--lcd-pixel);" />
+                <ellipse cx="38" cy="73" rx="5" ry="3.5" style="fill: var(--lcd-pixel);" />
+                <ellipse cx="62" cy="73" rx="5" ry="3.5" style="fill: var(--lcd-pixel);" />
+
+                <!-- Hobo Tent (Toggled during naps) -->
+                <g id="hoboTent" style="display: none;">
+                  <!-- Left and Right Tent Flaps -->
+                  <path d="M 5 82 L 50 10 L 60 82 Z" style="fill: var(--lcd-ghost); stroke: var(--lcd-pixel);" stroke-width="1.5" stroke-linejoin="round" />
+                  <path d="M 95 82 L 50 10 L 40 82 Z" style="fill: var(--lcd-bg); stroke: var(--lcd-pixel);" stroke-width="1.5" stroke-linejoin="round" />
+                  <!-- Patch on the side -->
+                  <rect x="65" y="55" width="10" height="10" transform="rotate(10 70 60)" style="fill: var(--lcd-ghost); stroke: var(--lcd-pixel);" stroke-width="1" />
+                  <line x1="68" y1="55" x2="68" y2="52" style="stroke: var(--lcd-pixel);" stroke-width="1"/>
+                  <line x1="72" y1="65" x2="72" y2="68" style="stroke: var(--lcd-pixel);" stroke-width="1"/>
+                  <!-- Top pole sticking out -->
+                  <line x1="50" y1="10" x2="50" y2="2" style="stroke: var(--lcd-pixel);" stroke-width="2" stroke-linecap="round"/>
+                  <line x1="44" y1="6" x2="50" y2="10" style="stroke: var(--lcd-pixel);" stroke-width="1" />
+                  <!-- Guy lines/Ropes -->
+                  <line x1="50" y1="10" x2="10" y2="85" style="stroke: var(--lcd-pixel);" stroke-width="0.5" stroke-dasharray="1,2"/>
+                  <line x1="50" y1="10" x2="90" y2="85" style="stroke: var(--lcd-pixel);" stroke-width="0.5" stroke-dasharray="1,2"/>
+                </g>
+
+                <!-- Ears -->
+                <polygon points="34,26 42,12 48,27" style="fill: var(--lcd-pixel);" />
+                <polygon points="37,24 42,16 46,25" style="fill: var(--lcd-ghost);" />
+                <polygon points="66,26 58,12 52,27" style="fill: var(--lcd-pixel);" />
+                <polygon points="63,24 58,16 54,25" style="fill: var(--lcd-ghost);" />
+                
+                <!-- Head & Mask -->
+                <ellipse cx="50" cy="35" rx="21" ry="15" style="fill: var(--lcd-pixel);" />
+                <ellipse cx="50" cy="36" rx="18" ry="8" style="fill: var(--lcd-ghost);" />
+                <ellipse cx="41" cy="35" rx="6" ry="5" style="fill: var(--lcd-pixel);" />
+                <ellipse cx="59" cy="35" rx="6" ry="5" style="fill: var(--lcd-pixel);" />
+                
+                <!-- Eyes -->
+                <g id="jimothyEyes">
+                  <circle cx="41" cy="34" r="2.2" style="fill: var(--lcd-bg);" />
+                  <circle cx="42" cy="34" r="1.1" style="fill: var(--lcd-pixel);" />
+                  <circle cx="59" cy="34" r="2.2" style="fill: var(--lcd-bg);" />
+                  <circle cx="58" cy="34" r="1.1" style="fill: var(--lcd-pixel);" />
+                </g>
+                
+                <!-- Zzz for sleeping (Hidden by default) -->
+                <g id="sleepZzz" style="display: none;">
+                  <text x="65" y="20" font-family="monospace" font-size="12" style="fill: var(--lcd-pixel); animation: zzzFloat 2s ease-in-out infinite;">Z</text>
+                  <text x="75" y="10" font-family="monospace" font-size="16" style="fill: var(--lcd-pixel); animation: zzzFloat 2.5s ease-in-out infinite;">z</text>
+                </g>
+                
+                <!-- Snout -->
+                <ellipse cx="50" cy="41" rx="5" ry="3.5" style="fill: var(--lcd-bg);" />
+                <polygon points="48,40 52,40 50,42" style="fill: var(--lcd-pixel);" />
+                <line x1="33" y1="39" x2="25" y2="38" style="stroke: var(--lcd-pixel);" stroke-width="1.5" />
+                <line x1="67" y1="39" x2="75" y2="38" style="stroke: var(--lcd-pixel);" stroke-width="1.5" />
+                
+                <!-- Crown -->
+                <g id="crownSlot" style="display: none;">
+                  <polygon points="42,16 46,21 50,14 54,21 58,16 57,25 43,25" style="fill: var(--lcd-pixel);" />
+                </g>
+              </svg>
+            </div>
+
+            <!-- Visiting Neighbor Jimothy (Visible when linked via Alley Link) -->
+            <div id="visitorRaccoon" class="absolute bottom-4 right-2 z-10 w-[52px] h-[54px] hidden flex-col items-center cursor-pointer idle-anim" title="Linked Neighbor Jimothy!">
+              <div id="visitorTag" class="px-1 py-0.2 rounded text-[6px] font-bold mb-0.5 border whitespace-nowrap" style="background-color: var(--lcd-bg); color: var(--lcd-pixel); border-color: var(--lcd-pixel);">🦝 BUDDY</div>
+              <svg viewBox="0 0 100 90" class="w-full h-full pixelated" style="transform: scaleX(-1);" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M 68 62 C 82 62, 94 56, 92 42 C 90 34, 80 34, 76 40 C 74 46, 75 52, 68 56 Z" style="fill: var(--lcd-pixel);" />
+                <path d="M 77 45 C 80 43, 85 45, 85 49" style="stroke: var(--lcd-bg);" stroke-width="3" stroke-linecap="round" />
+                <ellipse cx="50" cy="56" rx="20" ry="16" style="fill: var(--lcd-pixel);" />
+                <ellipse cx="49" cy="58" rx="12" ry="9" style="fill: var(--lcd-ghost);" />
+                <polygon points="34,26 42,12 48,27" style="fill: var(--lcd-pixel);" />
+                <polygon points="66,26 58,12 52,27" style="fill: var(--lcd-pixel);" />
+                <ellipse cx="50" cy="35" rx="19" ry="14" style="fill: var(--lcd-pixel);" />
+                <ellipse cx="50" cy="36" rx="16" ry="7" style="fill: var(--lcd-ghost);" />
+                <ellipse cx="41" cy="35" rx="5.5" ry="4.5" style="fill: var(--lcd-pixel);" />
+                <ellipse cx="59" cy="35" rx="5.5" ry="4.5" style="fill: var(--lcd-pixel);" />
+                <circle cx="41" cy="34" r="2" style="fill: var(--lcd-bg);" />
+                <circle cx="59" cy="34" r="2" style="fill: var(--lcd-bg);" />
+                <ellipse cx="50" cy="41" rx="4.5" ry="3" style="fill: var(--lcd-bg);" />
+                <g id="visitorCrown" style="display: none;">
+                  <polygon points="42,16 46,21 50,14 54,21 58,16 57,25 43,25" style="fill: var(--lcd-pixel);" />
+                </g>
+              </svg>
+            </div>
+
+            <!-- Possum Pet -->
+            <div id="possumPet" class="absolute bottom-2 left-3 z-10 w-[42px] h-[50px] pointer-events-none">
+              <div id="possumLootBadge" class="absolute -top-3.5 left-1/2 -translate-x-1/2 px-1 py-0.2 rounded text-[7px] font-bold whitespace-nowrap hidden items-center justify-center border shadow-sm" style="background-color: var(--lcd-bg); color: var(--lcd-pixel); border-color: var(--lcd-pixel);"></div>
+              <svg viewBox="0 0 40 45" class="w-full h-full pixelated" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <!-- Can Inside Rim -->
+                <ellipse cx="20" cy="28" rx="14" ry="3" style="fill: var(--lcd-ghost); stroke: var(--lcd-pixel);" stroke-width="1.5" />
+                
+                <g class="possum-anim">
+                  <!-- Possum Body (Ghost color for grey fur) -->
+                  <ellipse cx="20" cy="27" rx="7" ry="8" style="fill: var(--lcd-ghost); stroke: var(--lcd-pixel);" stroke-width="1.5"/>
+                  
+                  <!-- Ears (Dark with light inners) -->
+                  <circle cx="12" cy="19" r="3" style="fill: var(--lcd-ghost); stroke: var(--lcd-pixel);" stroke-width="1.5" />
+                  <circle cx="28" cy="19" r="3" style="fill: var(--lcd-ghost); stroke: var(--lcd-pixel);" stroke-width="1.5" />
+                  <circle cx="12" cy="19" r="1" style="fill: var(--lcd-bg);" />
+                  <circle cx="28" cy="19" r="1" style="fill: var(--lcd-bg);" />
+
+                  <!-- Head & Snout (White face, pointed) -->
+                  <path d="M 12,22 Q 20,16 28,22 Q 25,29 20,32.5 Q 15,29 12,22 Z" style="fill: var(--lcd-bg); stroke: var(--lcd-pixel);" stroke-width="1.5" stroke-linejoin="round"/>
+                  
+                  <!-- Eye Patches (Grey) -->
+                  <ellipse cx="16" cy="23" rx="2" ry="1.5" style="fill: var(--lcd-ghost); transform: rotate(-15deg); transform-origin: 16px 23px;" />
+                  <ellipse cx="24" cy="23" rx="2" ry="1.5" style="fill: var(--lcd-ghost); transform: rotate(15deg); transform-origin: 24px 23px;" />
+
+                  <!-- Eyes (Beady black) -->
+                  <circle cx="16" cy="23" r="1" style="fill: var(--lcd-pixel);" />
+                  <circle cx="24" cy="23" r="1" style="fill: var(--lcd-pixel);" />
+                  
+                  <!-- Nose (Black tip) -->
+                  <circle cx="20" cy="32.5" r="1" style="fill: var(--lcd-pixel);" />
+
+                  <!-- Whiskers -->
+                  <line x1="16" y1="28" x2="10" y2="26" style="stroke: var(--lcd-pixel);" stroke-width="0.75" />
+                  <line x1="16" y1="30" x2="10" y2="30" style="stroke: var(--lcd-pixel);" stroke-width="0.75" />
+                  <line x1="24" y1="28" x2="30" y2="26" style="stroke: var(--lcd-pixel);" stroke-width="0.75" />
+                  <line x1="24" y1="30" x2="30" y2="30" style="stroke: var(--lcd-pixel);" stroke-width="0.75" />
+                  
+                  <!-- Lid on head (Translates to perfectly cover the can when down) -->
+                  <ellipse cx="20" cy="13" rx="14" ry="3" style="fill: var(--lcd-bg); stroke: var(--lcd-pixel);" stroke-width="1.5" />
+                  <path d="M 17,13 L 17,9 L 23,9 L 23,13" style="fill: none; stroke: var(--lcd-pixel);" stroke-width="1.5" />
+                </g>
+                
+                <!-- Can Front Body -->
+                <path d="M 6,28 A 14 3 0 0 0 34 28 L 30,43 Q 20,46 10,43 Z" style="fill: var(--lcd-bg); stroke: var(--lcd-pixel);" stroke-width="1.5" />
+                <!-- Can Grooves -->
+                <line x1="12" y1="31" x2="14" y2="43" style="stroke: var(--lcd-pixel);" stroke-width="1" />
+                <line x1="20" y1="31" x2="20" y2="44" style="stroke: var(--lcd-pixel);" stroke-width="1" />
+                <line x1="28" y1="31" x2="26" y2="43" style="stroke: var(--lcd-pixel);" stroke-width="1" />
+              </svg>
+            </div>
+
+            <!-- Ground Props -->
+            <div id="groundProps" class="relative z-10 ar-hud-panel w-full flex justify-between items-end px-3 text-xs -mt-1 font-mono">
+              <span id="trashPropLeft"></span>
+              <span id="shinyCountLabel" class="text-[7px] font-bold">✨ CAPS: <span id="capsVal">3</span></span>
+              <span id="trashPropRight">🗑️</span>
+            </div>
+
+            <!-- Mini-Game Overlay -->
+            <div id="miniGameScreen" class="absolute inset-0 p-2 flex flex-col justify-between hidden z-20" style="background-color: var(--lcd-bg);">
+              <div class="flex justify-between items-center text-[7px] font-bold border-b pb-1" style="border-color: var(--lcd-ui);">
+                <span id="gameTitle">MIDNIGHT RAID</span>
+                <span id="gameTimer">TIME: 15s</span>
+              </div>
+              <div id="gameArena" class="relative flex-1 rounded border overflow-hidden my-1 flex items-center justify-center" style="background-color: var(--lcd-ghost); border-color: var(--lcd-ui);"></div>
+              <div class="text-[7px] text-center" id="gameInstructions">TAP [A] TIP BIN | [B] SNEAK</div>
+            </div>
+          </div>
+
+          <!-- Action Log -->
+          <div id="bottomConsole" class="relative z-10 ar-hud-panel border-t pt-1 flex justify-between items-center text-[9px] sm:text-[11px] shrink-0" style="border-color: var(--lcd-ui);">
+            <p id="actionLog" class="truncate font-mono tracking-tight font-bold">JIMOTHY is sniffing the rug...</p>
+            <span id="activityDot" class="w-1.5 h-1.5 rounded-full animate-ping shrink-0 ml-2" style="background-color: var(--lcd-pixel);"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Utilities Row -->
+      <div class="w-full mt-2 sm:mt-3 flex justify-center px-4 text-[8px] sm:text-[10px] font-bold shrink-0">
+        <button id="btnMenu" class="text-slate-200 bg-slate-800 px-6 py-1.5 rounded-full border border-slate-600 active:bg-slate-700 active:scale-95 transition-all shadow-[inset_0_-2px_4px_rgba(0,0,0,0.5)] tracking-widest">≡ MENU</button>
+      </div>
+
+      <!-- Gameboy Controls Area -->
+      <div class="w-full mt-2 sm:mt-5 mb-1 sm:mb-2 flex items-center justify-between px-3 sm:px-6 relative shrink-0">
+        
+        <!-- Classic D-Pad -->
+        <div class="relative w-[96px] h-[96px] sm:w-[130px] sm:h-[130px] md:w-[145px] md:h-[145px]">
+          <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <div class="w-[33%] h-full bg-gray-800 rounded-sm shadow-[inset_-2px_-2px_4px_rgba(0,0,0,0.5),inset_2px_2px_4px_rgba(255,255,255,0.1)] border border-gray-900"></div>
+            <div class="absolute w-full h-[33%] bg-gray-800 rounded-sm shadow-[inset_-2px_-2px_4px_rgba(0,0,0,0.5),inset_2px_2px_4px_rgba(255,255,255,0.1)] border border-gray-900"></div>
+            <div class="absolute w-[25%] h-[25%] bg-gray-700 rounded-full shadow-inner opacity-40"></div>
+          </div>
+          <button id="dpadUp" class="absolute top-0 left-1/2 -translate-x-1/2 w-[34%] h-[34%] z-20 active:bg-white/10 rounded-t-sm cursor-pointer"></button>
+          <button id="dpadDown" class="absolute bottom-0 left-1/2 -translate-x-1/2 w-[34%] h-[34%] z-20 active:bg-white/10 rounded-b-sm cursor-pointer"></button>
+          <button id="dpadLeft" class="absolute left-0 top-1/2 -translate-y-1/2 w-[34%] h-[34%] z-20 active:bg-white/10 rounded-l-sm cursor-pointer"></button>
+          <button id="dpadRight" class="absolute right-0 top-1/2 -translate-y-1/2 w-[34%] h-[34%] z-20 active:bg-white/10 rounded-r-sm cursor-pointer"></button>
+        </div>
+
+        <!-- A and B Action Buttons -->
+        <div class="flex space-x-3.5 sm:space-x-6 rotate-[-15deg] mt-6 sm:mt-10 mr-1 sm:mr-2">
+          <!-- Button B -->
+          <div class="flex flex-col items-center">
+            <button id="btnB" class="w-13 h-13 min-w-[52px] min-h-[52px] sm:w-16 sm:h-16 md:w-[70px] md:h-[70px] rounded-full bg-rose-600 border-b-4 border-rose-900 active:border-b-0 active:translate-y-1 active:bg-rose-700 flex items-center justify-center text-rose-200 font-extrabold text-lg sm:text-2xl shadow-[0_5px_10px_rgba(0,0,0,0.5)] transition-all">B</button>
+            <span class="text-[9px] sm:text-[11px] mt-1 font-bold tracking-widest" style="color: var(--brand-text);">RAID</span>
+          </div>
+          <!-- Button A -->
+          <div class="flex flex-col items-center -mt-6 sm:-mt-10">
+            <button id="btnA" class="w-13 h-13 min-w-[52px] min-h-[52px] sm:w-16 sm:h-16 md:w-[70px] md:h-[70px] rounded-full bg-rose-600 border-b-4 border-rose-900 active:border-b-0 active:translate-y-1 active:bg-rose-700 flex items-center justify-center text-rose-200 font-extrabold text-lg sm:text-2xl shadow-[0_5px_10px_rgba(0,0,0,0.5)] transition-all">A</button>
+            <span class="text-[9px] sm:text-[11px] mt-1 font-bold tracking-widest" style="color: var(--brand-text);">FEED</span>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Select & Start Buttons -->
+      <div class="w-full mt-2 sm:mt-6 mb-1 sm:mb-3 flex justify-center space-x-6 shrink-0">
+        <!-- Select -->
+        <div class="flex flex-col items-center rotate-[-15deg]">
+          <button id="btnSelect" class="w-14 h-4 sm:w-20 sm:h-5 md:w-24 md:h-6 bg-gray-800 rounded-full shadow-inner border-t border-gray-600 active:bg-gray-900 active:scale-95 transition-transform"></button>
+          <span class="text-[8px] sm:text-[10px] mt-1 font-bold tracking-widest" style="color: var(--brand-text);">NAP</span>
+        </div>
+        <!-- Start -->
+        <div class="flex flex-col items-center rotate-[-15deg]">
+          <button id="btnStart" class="w-14 h-4 sm:w-20 sm:h-5 md:w-24 md:h-6 bg-gray-800 rounded-full shadow-inner border-t border-gray-600 active:bg-gray-900 active:scale-95 transition-transform"></button>
+          <span class="text-[8px] sm:text-[10px] mt-1 font-bold tracking-widest" style="color: var(--brand-text);">LINT</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    class RetroSound {
+      constructor() { this.ctx = null; this.muted = false; }
+      init() {
+        if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+        if (this.ctx.state === 'suspended') this.ctx.resume();
+      }
+      toggleMute() { this.muted = !this.muted; return this.muted; }
+      playTone(freq, type = 'square', duration = 0.08, gainVal = 0.08) {
+        if (this.muted) return;
+        try {
+          this.init();
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = type;
+          osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+          gain.gain.setValueAtTime(gainVal, this.ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.0001, this.ctx.currentTime + duration);
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start(); osc.stop(this.ctx.currentTime + duration);
+        } catch(e) {}
+      }
+      beep() { this.playTone(880, 'square', 0.05, 0.05); this.rumble(30, 0.15, 0); }
+      munch() {
+        this.rumble(180, 0.3, 0.15);
+        if (this.muted) return;
+        this.init();
+        [220, 180, 260, 150].forEach((freq, idx) => setTimeout(() => this.playTone(freq, 'triangle', 0.06, 0.1), idx * 60));
+      }
+      hiss() {
+        this.rumble(200, 0.6, 0.4);
+        if (this.muted) return;
+        this.init();
+        const bufferSize = this.ctx.sampleRate * 0.15;
+        const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+        const noise = this.ctx.createBufferSource();
+        noise.buffer = buffer;
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'highpass'; filter.frequency.value = 1000;
+        const gain = this.ctx.createGain();
+        gain.gain.setValueAtTime(0.12, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.15);
+        noise.connect(filter); filter.connect(gain); gain.connect(this.ctx.destination);
+        noise.start();
+      }
+      scuttle() {
+        this.rumble(120, 0.25, 0.1);
+        if (this.muted) return;
+        [440, 520, 660, 480, 700].forEach((f, i) => setTimeout(() => this.playTone(f, 'sawtooth', 0.04, 0.05), i * 40));
+      }
+      fanfare() {
+        this.rumble(300, 0.5, 0.5);
+        if (this.muted) return;
+        [440, 554, 659, 880].forEach((n, idx) => setTimeout(() => this.playTone(n, 'square', 0.12, 0.1), idx * 90));
+      }
+      thud() { this.playTone(90, 'triangle', 0.15, 0.15); this.rumble(140, 0.2, 0.6); }
+      rumble(duration = 60, weakMagnitude = 0.3, strongMagnitude = 0.1) {
+        if (!navigator.getGamepads) return;
+        try {
+          const pads = navigator.getGamepads();
+          for (let i = 0; i < pads.length; i++) {
+            const pad = pads[i];
+            if (pad && pad.connected && pad.vibrationActuator && pad.vibrationActuator.playEffect) {
+              pad.vibrationActuator.playEffect('dual-rumble', {
+                startDelay: 0,
+                duration: duration,
+                weakMagnitude: weakMagnitude,
+                strongMagnitude: strongMagnitude
+              }).catch(() => {});
+            }
+          }
+        } catch(e) {}
+      }
+    }
+    const sound = new RetroSound();
+
+    class PushNotifier {
+      constructor() {
+        this.enabled = false;
+        this.lastNotifTime = {};
+        this.webhookUrl = '';
+        try {
+          this.webhookUrl = localStorage.getItem('jimothy_webhook_url') || '';
+        } catch(e) {}
+      }
+
+      configureWebhook() {
+        const current = this.webhookUrl || '';
+        const input = window.prompt("Enter Discord/Slack Webhook URL for Jimothy alerts (leave blank to clear):", current);
+        if (input === null) return;
+        this.webhookUrl = input.trim();
+        try {
+          if (this.webhookUrl) {
+            localStorage.setItem('jimothy_webhook_url', this.webhookUrl);
+            showReaction("💬 Webhook Set!", 1500);
+            setLog("Webhook connected! Sending test ping...");
+            this.sendWebhook("Jimothy-Gotchi", "🦝 Jimothy connected to this channel!");
+          } else {
+            localStorage.removeItem('jimothy_webhook_url');
+            showReaction("💬 Cleared", 1500);
+            setLog("Webhook removed.");
+          }
+        } catch(e) {}
+      }
+
+      async sendWebhook(title, body) {
+        if (!this.webhookUrl) return;
+        try {
+          await fetch(this.webhookUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              username: "Jimothy-Gotchi",
+              content: `**${title}**\n${body}`,
+              text: `*${title}*\n${body}`
+            })
+          });
+        } catch(e) {
+          console.warn("Webhook send failed", e);
+        }
+      }
+
+      async toggle() {
+        if (!("Notification" in window)) {
+          setLog("Notifications not supported in this browser.");
+          return false;
+        }
+
+        if (this.enabled) {
+          this.enabled = false;
+          return false;
+        }
+
+        if (Notification.permission === "granted") {
+          this.enabled = true;
+          this.testSend();
+          return true;
+        } else if (Notification.permission !== "denied") {
+          const permission = await Notification.requestPermission();
+          if (permission === "granted") {
+            this.enabled = true;
+            this.testSend();
+            return true;
+          } else {
+            setLog("Notification permission denied.");
+          }
+        } else {
+           setLog("Notifications blocked by browser.");
+        }
+        return false;
+      }
+      
+      testSend() {
+        if(this.enabled) new Notification("Jimothy-Gotchi", { body: "Notifications enabled! 🦝" });
+      }
+
+      send(type, title, body, cooldown = 60000) {
+        const now = Date.now();
+        if (now - (this.lastNotifTime[type] || 0) < cooldown) return;
+        this.lastNotifTime[type] = now;
+
+        if (this.webhookUrl) {
+          this.sendWebhook(title, body);
+        }
+
+        if (!this.enabled || !("Notification" in window) || Notification.permission !== "granted") return;
+        
+        try {
+          new Notification(title, { body: body });
+        } catch(e) {
+          console.warn("Notification failed", e);
+        }
+      }
+    }
+    const notifier = new PushNotifier();
+
+    const SHAPES = [
+      "12px 12px 40px 40px",
+      "45% 45% 50% 50% / 55% 55% 45% 45%",
+      "16px",
+      "60px"
+    ];
+
+    const THEMES = [
+      { name: 'Forest', bg1: '#2d6b52', bg2: '#1e4a38', bg3: '#122c22', border: '#0f251c', brand: '#6ee7b7' },
+      { name: 'Berry', bg1: '#6b2d5c', bg2: '#4a1e3e', bg3: '#2c1224', border: '#250f1d', brand: '#e76eb4' },
+      { name: 'Classic', bg1: '#9ca3af', bg2: '#6b7280', bg3: '#4b5563', border: '#374151', brand: '#1f2937' },
+      { name: 'Ocean', bg1: '#2d4a6b', bg2: '#1e324a', bg3: '#121e2c', border: '#0f1825', brand: '#6eabe7' }
+    ];
+
+    const LCD_STYLES = [
+      { name: 'Spinach', bg: '#8ca374', pixel: '#1c2718', ghost: '#7f9568', ui: 'rgba(28, 39, 24, 0.3)' },
+      { name: 'Sapphire', bg: '#7493a3', pixel: '#182327', ghost: '#688695', ui: 'rgba(24, 35, 39, 0.3)' },
+      { name: 'Amber', bg: '#a38c74', pixel: '#271e18', ghost: '#957d68', ui: 'rgba(39, 30, 24, 0.3)' },
+      { name: 'Paper', bg: '#e5e7eb', pixel: '#111827', ghost: '#d1d5db', ui: 'rgba(17, 24, 39, 0.2)' }
+    ];
+
+    let prefs = { shapeIdx: 0, themeIdx: 0, lcdIdx: 0 };
+    const PREFS_KEY = 'jimothy_theme_prefs';
+
+    function applyPrefs() {
+      const root = document.documentElement;
+      const shape = SHAPES[prefs.shapeIdx];
+      const theme = THEMES[prefs.themeIdx];
+      const lcd = LCD_STYLES[prefs.lcdIdx];
+
+      root.style.setProperty('--shell-radius', shape);
+      
+      root.style.setProperty('--shell-bg-1', theme.bg1);
+      root.style.setProperty('--shell-bg-2', theme.bg2);
+      root.style.setProperty('--shell-bg-3', theme.bg3);
+      root.style.setProperty('--shell-border', theme.border);
+      root.style.setProperty('--brand-text', theme.brand);
+
+      root.style.setProperty('--lcd-bg', lcd.bg);
+      root.style.setProperty('--lcd-pixel', lcd.pixel);
+      root.style.setProperty('--lcd-ghost', lcd.ghost);
+      root.style.setProperty('--lcd-ui', lcd.ui);
+
+      localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
+    }
+
+    function loadPrefs() {
+       try {
+         const stored = localStorage.getItem(PREFS_KEY);
+         if (stored) prefs = { ...prefs, ...JSON.parse(stored) };
+       } catch(e) {}
+       applyPrefs();
+    }
+
+    const STATE_KEY = 'jimothy_tamagotchi_save';
+    let pet = {
+      name: "Jimothy", ageMinutes: 1, hunger: 75, chaos: 50, grease: 65, energy: 70,
+      shinyCaps: 3, stage: 'kit', isSleeping: false, lastSaved: Date.now(), inMiniGame: false,
+      trashCollected: 0, raidFrenzy: 0, palaceSeed: 0.5, inventory: {}, palaceParts: {}, possumStole: 0,
+      possumLoot: { trash: 0, caps: 0, items: {}, parts: [], icons: [] }
+    };
+
+    let isGeneratingAI = false;
+    let isAnimatingThrow = false;
+    let currentFoodIdx = 0;
+    const TRASH_MENU = [
+      { name: "Soggy Fries", hunger: +18, chaos: +5, grease: +10, desc: "Slurped down 4 limp fries!" },
+      { name: "Fish Skeleton", hunger: +25, chaos: +10, grease: +15, desc: "Crunched the spine with glee!" },
+      { name: "Half a Donut", hunger: +35, chaos: +20, grease: +5, desc: "Sugar rush activated!" },
+      { name: "Fresh Broccoli", hunger: -10, chaos: +30, grease: -5, isGross: true, desc: "Hissed and chucked the greens!" }
+    ];
+
+    // DOM References
+    const elements = {
+      hunger: document.getElementById('hungerNum'), hungerBar: document.getElementById('hungerBar'),
+      chaos: document.getElementById('chaosNum'), chaosBar: document.getElementById('chaosBar'),
+      grease: document.getElementById('greaseNum'), greaseBar: document.getElementById('greaseBar'),
+      energy: document.getElementById('energyNum'), energyBar: document.getElementById('energyBar'),
+      log: document.getElementById('actionLog'), bubble: document.getElementById('speechBubble'),
+      graphic: document.getElementById('jimothyGraphic'), eyes: document.getElementById('jimothyEyes'),
+      sleepZzz: document.getElementById('sleepZzz'), hoboTent: document.getElementById('hoboTent'),
+      screenSplat: document.getElementById('screenSplat'),
+      splatGraphic: document.getElementById('splatGraphic'), screenCrack: document.getElementById('screenCrack'),
+      lcdScreen: document.getElementById('lcdScreen'), capsVal: document.getElementById('capsVal'),
+      rankBadge: document.getElementById('rankBadge'), crown: document.getElementById('crownSlot')
+    };
+
+    // Controls
+    const btnA = document.getElementById('btnA');
+    const btnB = document.getElementById('btnB');
+    const btnSelect = document.getElementById('btnSelect');
+    const btnStart = document.getElementById('btnStart');
+    const btnMenu = document.getElementById('btnMenu');
+
+    function updateBaseAnimation() {
+      if (pet.isSleeping || isAnimatingThrow || pet.inMiniGame) {
+        elements.graphic.classList.remove('idle-anim', 'chaos-anim');
+        return;
+      }
+      if (elements.graphic.classList.contains('shake-anim') || elements.graphic.classList.contains('scurry-anim')) return;
+      
+      elements.graphic.classList.remove('idle-anim', 'chaos-anim');
+      elements.graphic.classList.add('idle-anim');
+    }
+
+    function showReaction(text, duration = 1600) {
+      elements.bubble.textContent = text;
+      elements.bubble.style.opacity = '1';
+      setTimeout(() => elements.bubble.style.opacity = '0', duration);
+    }
+    function setLog(msg) { elements.log.textContent = msg; }
+    function saveState() {
+      pet.lastSaved = Date.now();
+      localStorage.setItem(STATE_KEY, JSON.stringify(pet));
+    }
+
+    function loadState() {
+      try {
+        const saved = localStorage.getItem(STATE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          pet = { ...pet, ...parsed };
+          pet.inMiniGame = false;
+          pet.inventory = pet.inventory || {};
+          pet.palaceParts = pet.palaceParts || {};
+          pet.possumLoot = pet.possumLoot || { trash: 0, caps: 0, items: {}, parts: [], icons: [] };
+          
+          if (pet.lastSaved) {
+            const now = Date.now();
+            const diffMs = now - pet.lastSaved;
+            const diffMinutes = Math.floor(diffMs / 60000);
+            const diff10s = Math.floor(diffMs / 10000);
+            
+            if (diff10s > 0) {
+              pet.ageMinutes += diffMinutes;
+              if (pet.isSleeping) {
+                pet.energy = Math.min(100, pet.energy + (8 * diff10s));
+              } else {
+                pet.hunger = Math.max(0, pet.hunger - (2.5 * diff10s));
+                pet.chaos = Math.min(100, pet.chaos + (2 * diff10s));
+                pet.grease = Math.max(0, pet.grease - (1 * diff10s));
+                pet.energy = Math.max(0, pet.energy - (1.5 * diff10s));
+              }
+              console.log(`Loaded Jimothy. Missed ${diff10s} ticks while away.`);
+            }
+          }
+        }
+      } catch(e) { console.warn("Save load error, starting fresh", e); }
+    }
+
+    function checkEvolution() {
+      const oldStage = pet.stage;
+      if (pet.shinyCaps >= 10 && pet.chaos >= 70) pet.stage = 'emperor';
+      else if (pet.grease >= 75) pet.stage = 'goblin';
+      else if (pet.chaos >= 60) pet.stage = 'burglar';
+      else pet.stage = 'kit';
+
+      let title = "KIT BANDIT";
+      if (pet.stage === 'burglar') title = "MIDNIGHT BURGLAR";
+      if (pet.stage === 'goblin') title = "FERAL SEWER GOBLIN";
+      if (pet.stage === 'emperor') { title = "👑 DUMPSTER EMPEROR"; elements.crown.style.display = 'block'; } 
+      else elements.crown.style.display = 'none';
+
+      if (oldStage !== pet.stage) {
+        sound.fanfare();
+        showReaction("⚡ EVOLVED! ⚡", 2500);
+        notifier.send('evolve', 'Jimothy Mutated! ⚡', `God help us all, he's now a ${title}...`, 0);
+      }
+      elements.rankBadge.textContent = `${title} (M:${pet.ageMinutes})`;
+    }
+
+    // Menu System
+    let isMenuOpen = false;
+    let menuIndex = 0;
+    const MENU_OPTIONS = ["✨ AI FORAGE", "🎒 INVENTORY", "🛒 MARKET", "📡 ALLEY LINK", "📷 AR MODE", "💤 NAP TIME", "🧹 LINT ROLL", "🔄 RESET JIMOTHY", "❌ CANCEL"];
+
+    // Inventory System
+    let isInventoryOpen = false;
+    let invIndex = 0;
+    let invItems = [];
+    
+    // Market System
+    let isMarketOpen = false;
+    let marketTab = 'trash'; // 'trash' | 'palace'
+    let marketIndex = 0;
+
+    const MARKET_CATALOG = {
+      trash: [
+        { id: 'dumpster_haul', icon: '🗑️', name: 'Dumpster Haul', cost: 2, desc: 'Instant +50 Palace Trash & +25% TRASH meter!', type: 'haul' },
+        { id: 'stale_pizza', icon: '🍕', name: 'Floor Pizza', cost: 2, desc: 'Bag item: Aged perfectly. TRASH +40', type: 'item', itemId: 'stale_pizza' },
+        { id: 'sludge', icon: '🧪', name: 'Glow Sludge', cost: 2, desc: 'Bag item: Delicious. GREASE +30 TRASH +10', type: 'item', itemId: 'sludge' },
+        { id: 'battery', icon: '🔋', name: 'AA Battery', cost: 2, desc: 'Bag item: Spicy tube. ENERGY +25 CHAOS +10', type: 'item', itemId: 'battery' },
+        { id: 'rat_toy', icon: '🐁', name: 'Rubber Rat', cost: 3, desc: 'Bag item: Squeak! Calms CHAOS -25', type: 'item', itemId: 'rat_toy' },
+        { id: 'energy_drink', icon: '🥫', name: 'Jolt Cola', cost: 4, desc: 'Bag item: Liquid zoom! ENERGY +50 CHAOS +30', type: 'item', itemId: 'energy_drink' },
+        { id: 'mystery_bag', icon: '🛍️', name: 'Mystery Bag', cost: 8, desc: 'Unboxes 3-4 random items into your bag!', type: 'mystery' }
+      ],
+      palace: [
+        { id: 'part_box', icon: '📦', name: 'Cardboard Keep', cost: 3, desc: 'Builds FRAGILE box fort (+45 Palace Trash)', type: 'part', partId: 'box', trashBonus: 45, unlockAt: 30 },
+        { id: 'part_cart', icon: '🛒', name: 'Crate & Pizza Stack', cost: 4, desc: 'Builds milk crate & pizza tower (+75 Palace Trash)', type: 'part', partId: 'cart', trashBonus: 75, unlockAt: 90 },
+        { id: 'part_flamingo', icon: '🦩', name: 'Lawn Flamingo', cost: 4, desc: 'Plastic flamingo palace guard (+80 Palace Trash)', type: 'part', partId: 'flamingo', trashBonus: 80 },
+        { id: 'part_tv', icon: '📺', name: 'CRT TV & Tire', cost: 5, desc: 'Builds rabbit-ear TV & tire wall (+110 Palace Trash)', type: 'part', partId: 'tv', trashBonus: 110, unlockAt: 180 },
+        { id: 'part_flag', icon: '🚩', name: 'Bandit Slide & Flag', cost: 6, desc: 'Builds escape slide & flag (+140 Palace Trash)', type: 'part', partId: 'flag', trashBonus: 140, unlockAt: 300 },
+        { id: 'part_dish', icon: '🛰️', name: 'Rooftop Dish', cost: 7, desc: 'Beams trash signals from space (+160 Palace Trash)', type: 'part', partId: 'dish', trashBonus: 160 },
+        { id: 'part_canopy', icon: '🎪', name: 'Royal Light Canopy', cost: 8, desc: 'Star tarp & twinkling lights (+220 Palace Trash)', type: 'part', partId: 'canopy', trashBonus: 220, unlockAt: 500 }
+      ]
+    };
+    
+    const ITEM_DB = {
+      'battery': { icon: '🔋', name: 'AA Battery', desc: 'Spicy tube. ENERGY+25 CHAOS+10', use: () => { pet.energy+=25; pet.chaos+=10; sound.scuttle(); } },
+      'sludge': { icon: '🧪', name: 'Glow Sludge', desc: 'Delicious. GREASE+30 TRASH+10', use: () => { pet.grease+=30; pet.hunger+=10; sound.munch(); } },
+      'rat_toy': { icon: '🐁', name: 'Rubber Rat', desc: 'Squeak! Calms him down. CHAOS-25', use: () => { pet.chaos-=25; sound.beep(); } },
+      'stale_pizza': { icon: '🍕', name: 'Floor Pizza', desc: 'Aged perfectly. TRASH+40', use: () => { pet.hunger+=40; sound.munch(); } },
+      'energy_drink': { icon: '🥫', name: 'Jolt Cola', desc: 'Liquid zoom! ENERGY+50 CHAOS+30', use: () => { pet.energy+=50; pet.chaos+=30; sound.fanfare(); } }
+    };
+
+    function renderMenu() {
+      const list = document.getElementById('menuList');
+      list.innerHTML = '';
+      MENU_OPTIONS.forEach((opt, idx) => {
+        const item = document.createElement('div');
+        item.className = `p-1 rounded flex items-center transition-colors duration-100 ${idx === menuIndex ? 'shadow-inner' : ''}`;
+        if (idx === menuIndex) {
+          item.style.backgroundColor = 'var(--lcd-pixel)';
+          item.style.color = 'var(--lcd-bg)';
+        }
+        item.textContent = (idx === menuIndex ? '▶ ' : '  ') + opt;
+        list.appendChild(item);
+      });
+    }
+
+    function toggleMenu() {
+      if (pet.inMiniGame) return;
+      isMenuOpen = !isMenuOpen;
+      const menuDiv = document.getElementById('menuScreen');
+      if (isMenuOpen) {
+        menuIndex = 0;
+        menuDiv.classList.remove('hidden');
+        menuDiv.classList.add('flex');
+        renderMenu();
+        sound.beep();
+      } else {
+        menuDiv.classList.add('hidden');
+        menuDiv.classList.remove('flex');
+        sound.beep();
+      }
+    }
+
+    function toggleInventory() {
+      if (pet.inMiniGame) return;
+      isInventoryOpen = !isInventoryOpen;
+      const invDiv = document.getElementById('inventoryScreen');
+      if (isInventoryOpen) {
+        invDiv.classList.remove('hidden');
+        invDiv.classList.add('flex');
+        renderInventory();
+        sound.beep();
+      } else {
+        invDiv.classList.add('hidden');
+        invDiv.classList.remove('flex');
+        sound.beep();
+      }
+    }
+
+    function isPalacePartBuilt(entry) {
+      pet.palaceParts = pet.palaceParts || {};
+      if (pet.palaceParts[entry.partId]) return true;
+      if (entry.unlockAt && (pet.trashCollected || 0) > entry.unlockAt) return true;
+      return false;
+    }
+
+    function renderMarket() {
+      const capsEl = document.getElementById('marketCaps');
+      if (capsEl) capsEl.textContent = `✨ CAPS: ${pet.shinyCaps}`;
+
+      const tabTrash = document.getElementById('marketTabTrash');
+      const tabPalace = document.getElementById('marketTabPalace');
+      if (tabTrash && tabPalace) {
+        const setTabStyle = (el, active) => {
+          el.style.borderColor = 'var(--lcd-pixel)';
+          el.style.backgroundColor = active ? 'var(--lcd-pixel)' : 'transparent';
+          el.style.color = active ? 'var(--lcd-bg)' : 'var(--lcd-pixel)';
+        };
+        setTabStyle(tabTrash, marketTab === 'trash');
+        setTabStyle(tabPalace, marketTab === 'palace');
+      }
+
+      const items = MARKET_CATALOG[marketTab] || [];
+      if (marketIndex >= items.length) marketIndex = Math.max(0, items.length - 1);
+
+      const listEl = document.getElementById('marketList');
+      listEl.innerHTML = '';
+
+      items.forEach((entry, idx) => {
+        const row = document.createElement('div');
+        const isSelected = idx === marketIndex;
+        const built = entry.type === 'part' && isPalacePartBuilt(entry);
+
+        row.className = `px-1.5 py-0.5 rounded flex justify-between items-center cursor-pointer transition-colors duration-100`;
+        if (isSelected) {
+          row.style.backgroundColor = 'var(--lcd-pixel)';
+          row.style.color = 'var(--lcd-bg)';
+        } else {
+          row.style.color = 'var(--lcd-pixel)';
+        }
+
+        const rightLabel = built ? 'BUILT ✓' : `${entry.cost}✨`;
+        row.innerHTML = `
+          <span class="truncate">${isSelected ? '▶ ' : '  '}${entry.icon} ${entry.name}</span>
+          <span class="font-bold ml-1 shrink-0">${rightLabel}</span>
+        `;
+        row.addEventListener('click', () => {
+          marketIndex = idx;
+          renderMarket();
+          buyMarketSelection();
+        });
+        listEl.appendChild(row);
+        if (isSelected) {
+          row.scrollIntoView({ block: 'nearest' });
+        }
+      });
+
+      const descText = document.getElementById('marketDescText');
+      if (descText && items[marketIndex]) {
+        descText.textContent = items[marketIndex].desc;
+      }
+    }
+
+    function toggleMarket() {
+      if (pet.inMiniGame) return;
+      isMarketOpen = !isMarketOpen;
+      const marketDiv = document.getElementById('marketplaceScreen');
+      if (isMarketOpen) {
+        marketIndex = 0;
+        marketDiv.classList.remove('hidden');
+        marketDiv.classList.add('flex');
+        renderMarket();
+        sound.beep();
+      } else {
+        marketDiv.classList.add('hidden');
+        marketDiv.classList.remove('flex');
+        sound.beep();
+      }
+    }
+
+    document.getElementById('marketTabTrash').addEventListener('click', () => {
+      sound.beep();
+      marketTab = 'trash';
+      marketIndex = 0;
+      renderMarket();
+    });
+    document.getElementById('marketTabPalace').addEventListener('click', () => {
+      sound.beep();
+      marketTab = 'palace';
+      marketIndex = 0;
+      renderMarket();
+    });
+
+    function buyMarketSelection() {
+      const items = MARKET_CATALOG[marketTab] || [];
+      const entry = items[marketIndex];
+      if (!entry) return;
+
+      pet.palaceParts = pet.palaceParts || {};
+      pet.inventory = pet.inventory || {};
+
+      if (entry.type === 'part' && isPalacePartBuilt(entry)) {
+        sound.thud();
+        showReaction("ALREADY BUILT!");
+        setLog(`${entry.name} is already part of Jimothy's palace!`);
+        return;
+      }
+
+      if (pet.shinyCaps < entry.cost) {
+        sound.thud();
+        showReaction("NEED MORE CAPS!");
+        setLog(`Need ${entry.cost} CAPS for ${entry.name} (have ${pet.shinyCaps}).`);
+        return;
+      }
+
+      pet.shinyCaps -= entry.cost;
+
+      if (entry.type === 'item') {
+        pet.inventory[entry.itemId] = (pet.inventory[entry.itemId] || 0) + 1;
+        sound.fanfare();
+        showReaction(`Bought ${entry.icon}!`);
+        setLog(`Purchased ${entry.name} for ${entry.cost} CAPS!`);
+      } else if (entry.type === 'haul') {
+        pet.trashCollected = (pet.trashCollected || 0) + 50;
+        pet.hunger = Math.min(100, pet.hunger + 25);
+        sound.munch();
+        showReaction("🗑️ +50 TRASH!");
+        setLog("Bought a Dumpster Haul! Palace grew & Jimothy snacked.");
+        drawTrashPalace();
+      } else if (entry.type === 'mystery') {
+        sound.fanfare();
+        const numItems = Math.floor(Math.random() * 2) + 3; // 3 or 4 items
+        const itemKeys = Object.keys(ITEM_DB);
+        let looted = [];
+        for (let i = 0; i < numItems; i++) {
+          const randomItem = itemKeys[Math.floor(Math.random() * itemKeys.length)];
+          pet.inventory[randomItem] = (pet.inventory[randomItem] || 0) + 1;
+          looted.push(ITEM_DB[randomItem].icon);
+        }
+        showReaction(`Got ${looted.join(" ")}!`);
+        setLog(`Opened mystery bag! Found: ${looted.join(" ")}`);
+      } else if (entry.type === 'part') {
+        pet.palaceParts[entry.partId] = true;
+        pet.trashCollected = (pet.trashCollected || 0) + (entry.trashBonus || 50);
+        sound.fanfare();
+        showReaction(`🏰 +${entry.icon} BUILT!`);
+        setLog(`Constructed ${entry.name} in the Trash Palace!`);
+        drawTrashPalace();
+        if (!pet.isSleeping && !isAnimatingThrow) {
+          elements.graphic.classList.remove('idle-anim');
+          elements.graphic.classList.add('scurry-anim');
+          setTimeout(() => {
+            elements.graphic.classList.remove('scurry-anim');
+            updateBaseAnimation();
+          }, 1200);
+        }
+      }
+
+      renderMarket();
+      updateHUD();
+    }
+
+    function renderInventory() {
+      const grid = document.getElementById('inventoryGrid');
+      const desc = document.getElementById('inventoryDesc');
+      grid.innerHTML = '';
+      
+      pet.inventory = pet.inventory || {};
+      invItems = Object.keys(pet.inventory).filter(k => pet.inventory[k] > 0);
+      
+      if (invItems.length === 0) {
+        desc.innerHTML = "BAG IS EMPTY.<br/>Play RAID to find items!";
+        return;
+      }
+      
+      if (invIndex >= invItems.length) invIndex = Math.max(0, invItems.length - 1);
+      
+      invItems.forEach((itemId, idx) => {
+        const item = ITEM_DB[itemId];
+        const count = pet.inventory[itemId];
+        
+        const slot = document.createElement('div');
+        slot.className = `w-full aspect-square border flex items-center justify-center relative text-lg sm:text-xl transition-all ${idx === invIndex ? 'shadow-inner' : ''}`;
+        slot.style.borderColor = idx === invIndex ? 'var(--lcd-pixel)' : 'var(--lcd-ui)';
+        slot.style.backgroundColor = idx === invIndex ? 'var(--lcd-pixel)' : 'transparent';
+        slot.style.color = idx === invIndex ? 'var(--lcd-bg)' : 'var(--lcd-pixel)';
+        
+        slot.innerHTML = `
+          <span class="pixelated">${item.icon}</span>
+          <span class="absolute bottom-0 right-0.5 text-[6px] sm:text-[7px] font-bold">x${count}</span>
+        `;
+        grid.appendChild(slot);
+      });
+      
+      if (invItems.length > 0) {
+        const activeItem = ITEM_DB[invItems[invIndex]];
+        desc.innerHTML = `[${activeItem.name}]<br/>${activeItem.desc}`;
+      }
+    }
+
+    function executeMenuOption() {
+      const opt = MENU_OPTIONS[menuIndex];
+      toggleMenu(); 
+      
+      if (opt.includes("NAP")) {
+        toggleNap();
+      } else if (opt.includes("LINT")) {
+        btnStart.click(); 
+      } else if (opt.includes("INVENTORY")) {
+        toggleInventory();
+      } else if (opt.includes("MARKET")) {
+        toggleMarket();
+      } else if (opt.includes("ALLEY LINK")) {
+        toggleAlleyLink();
+      } else if (opt.includes("AR MODE")) {
+        toggleARMode();
+      } else if (opt.includes("RESET")) {
+        localStorage.removeItem(STATE_KEY); 
+        pet = { name: "Jimothy", ageMinutes: 1, hunger: 80, chaos: 45, grease: 60, energy: 70, shinyCaps: 3, stage: 'kit', isSleeping: false, trashCollected: 0, raidFrenzy: 0, palaceSeed: Math.random(), inventory: {}, palaceParts: {}, possumStole: 0, possumLoot: { trash: 0, caps: 0, items: {}, parts: [], icons: [] } };
+        stopPossumHeistTimer();
+        renderPossumLootBadge();
+        
+        if (pet.inMiniGame) {
+          clearInterval(miniGameInterval);
+          document.getElementById('miniGameScreen').classList.add('hidden');
+          document.getElementById('miniGameScreen').classList.remove('flex');
+          pet.inMiniGame = false;
+        }
+        
+        elements.graphic.classList.remove('shake-anim', 'scurry-anim', 'idle-anim', 'chaos-anim');
+        updateBaseAnimation();
+        elements.eyes.style.display = 'block';
+        elements.sleepZzz.style.display = 'none';
+        elements.hoboTent.style.display = 'none';
+        
+        const dreamBubble = document.getElementById('dreamBubble');
+        if (dreamBubble) {
+          dreamBubble.classList.add('hidden');
+          dreamBubble.classList.remove('flex');
+        }
+        if (dreamInterval) clearInterval(dreamInterval);
+
+        showReaction("🐣 REBORN KIT!");
+        setLog("A fresh Jimothy crawled out of the recycling bin.");
+        drawTrashPalace();
+        updateHUD();
+      } else if (opt.includes("AI FORAGE")) {
+         if (pet.isSleeping) {
+           sound.thud();
+           showReaction("💤 Sleeping!");
+           setLog("Jimothy is asleep and cannot forage right now.");
+         } else {
+           triggerRandomAntics();
+           updateHUD();
+         }
+      }
+    }
+
+    function updateHUD() {
+      pet.hunger = Math.min(100, Math.max(0, pet.hunger));
+      pet.chaos = Math.min(100, Math.max(0, pet.chaos));
+      pet.grease = Math.min(100, Math.max(0, pet.grease));
+      pet.energy = Math.min(100, Math.max(0, pet.energy));
+
+      elements.hungerBar.style.width = `${pet.hunger}%`;
+      elements.hunger.textContent = `${Math.round(pet.hunger)}%`;
+
+      elements.chaosBar.style.width = `${pet.chaos}%`;
+      elements.chaos.textContent = `${Math.round(pet.chaos)}%`;
+
+      elements.greaseBar.style.width = `${pet.grease}%`;
+      elements.grease.textContent = `${Math.round(pet.grease)}%`;
+
+      elements.energyBar.style.width = `${pet.energy}%`;
+      elements.energy.textContent = `${Math.round(pet.energy)}%`;
+
+      elements.capsVal.textContent = pet.shinyCaps;
+
+      checkEvolution();
+      updateClockDisplay();
+      updateBaseAnimation();
+      
+      saveState();
+    }
+
+    function updateClockDisplay() {
+      const now = new Date();
+      let hrs = now.getHours();
+      let mins = now.getMinutes();
+      
+      let displayHrs = hrs % 12 || 12;
+      let ampm = hrs >= 12 ? 'PM' : 'AM';
+      const timeClock = document.getElementById('timeClock');
+      if (timeClock) timeClock.textContent = `${displayHrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')} ${ampm}`;
+
+      const statusMoon = document.getElementById('statusMoon');
+      const starGroup = document.getElementById('starGroup');
+      let isDay = hrs >= 6 && hrs < 18;
+
+      const celestialBody = document.getElementById('celestialBody');
+      const streetLightBeam = document.getElementById('streetLightBeam');
+      
+      let f; 
+      
+      if (isDay) {
+         f = (hrs - 6 + mins/60) / 12;
+         if (statusMoon) statusMoon.textContent = '☀️';
+         if (starGroup) starGroup.style.display = 'none';
+         if (streetLightBeam) streetLightBeam.style.display = 'none';
+         if (celestialBody) {
+             celestialBody.innerHTML = `
+                 <circle cx="0" cy="0" r="3.5" fill="none" stroke-width="1.5" stroke="var(--lcd-pixel)"/>
+                 <line x1="-6" y1="0" x2="-8" y2="0" stroke="var(--lcd-pixel)" stroke-width="1"/>
+                 <line x1="6" y1="0" x2="8" y2="0" stroke="var(--lcd-pixel)" stroke-width="1"/>
+                 <line x1="0" y1="-6" x2="0" y2="-8" stroke="var(--lcd-pixel)" stroke-width="1"/>
+                 <line x1="0" y1="6" x2="0" y2="8" stroke="var(--lcd-pixel)" stroke-width="1"/>
+                 <line x1="-4" y1="-4" x2="-5.5" y2="-5.5" stroke="var(--lcd-pixel)" stroke-width="1"/>
+                 <line x1="4" y1="4" x2="5.5" y2="5.5" stroke="var(--lcd-pixel)" stroke-width="1"/>
+                 <line x1="-4" y1="4" x2="-5.5" y2="5.5" stroke="var(--lcd-pixel)" stroke-width="1"/>
+                 <line x1="4" y1="-4" x2="5.5" y2="-5.5" stroke="var(--lcd-pixel)" stroke-width="1"/>
+             `;
+         }
+      } else {
+         let nightHrs = hrs >= 18 ? hrs - 18 : hrs + 6;
+         f = (nightHrs + mins/60) / 12;
+         if (statusMoon) statusMoon.textContent = '🌙';
+         if (starGroup) starGroup.style.display = 'block';
+         if (streetLightBeam) streetLightBeam.style.display = 'block';
+         if (celestialBody) {
+             celestialBody.innerHTML = `<path d="M 0,-4 A 4.5,4.5 0 1,0 4,4 A 5.5,5.5 0 0,1 0,-4 Z" style="fill: var(--lcd-pixel);" stroke="none" />`;
+         }
+      }
+
+      if (celestialBody) {
+         const x = 20 + (f * 90); 
+         const y = 25 - (Math.sin(f * Math.PI) * 18);
+         celestialBody.setAttribute('transform', `translate(${x}, ${y})`);
+      }
+    }
+
+    function throwTrashAtScreen() {
+      if (pet.inMiniGame || pet.isSleeping || isAnimatingThrow) return;
+      isAnimatingThrow = true;
+      
+      const projectiles = [
+        { emoji: "🍅", type: "splat", log: "a rotten tomato" },
+        { emoji: "🪨", type: "crack", log: "a heavy rock" },
+        { emoji: "🥦", type: "glitch", log: "cursed broccoli" },
+        { emoji: "🥫", type: "crack", log: "a soup can" }
+      ];
+      
+      const proj = projectiles[Math.floor(Math.random() * projectiles.length)];
+      sound.thud();
+      elements.graphic.classList.remove('idle-anim', 'chaos-anim');
+      elements.graphic.style.transform = 'scale(1.5) translateY(10px)';
+      
+      setTimeout(() => {
+        elements.graphic.style.transform = 'scale(1)';
+        sound.hiss();
+        showReaction("🤬 *YEET*");
+        setLog(`Jimothy threw ${proj.log} at the screen!`);
+        
+        if (proj.type === 'splat') {
+           elements.screenSplat.classList.remove('hidden');
+           elements.screenSplat.classList.add('flex');
+           elements.splatGraphic.textContent = proj.emoji;
+           elements.splatGraphic.classList.add('splat-drip');
+        } else if (proj.type === 'crack') {
+           elements.screenCrack.classList.remove('hidden');
+        } else if (proj.type === 'glitch') {
+           elements.lcdScreen.classList.add('glitch-effect');
+        }
+      }, 300);
+
+      setTimeout(() => {
+         elements.screenSplat.classList.add('hidden');
+         elements.screenSplat.classList.remove('flex');
+         elements.splatGraphic.classList.remove('splat-drip');
+         elements.screenCrack.classList.add('hidden');
+         elements.lcdScreen.classList.remove('glitch-effect');
+         
+         isAnimatingThrow = false;
+         updateBaseAnimation();
+      }, 4000);
+    }
+
+    let possumHeistTimeout = null;
+    let possumHeistInterval = null;
+
+    function ensurePossumLoot() {
+      if (!pet.possumLoot || typeof pet.possumLoot !== 'object') {
+        pet.possumLoot = { trash: 0, caps: 0, items: {}, parts: [], icons: [] };
+      }
+      pet.possumLoot.trash = pet.possumLoot.trash || 0;
+      pet.possumLoot.caps = pet.possumLoot.caps || 0;
+      pet.possumLoot.items = pet.possumLoot.items || {};
+      pet.possumLoot.parts = Array.isArray(pet.possumLoot.parts) ? pet.possumLoot.parts : [];
+      pet.possumLoot.icons = Array.isArray(pet.possumLoot.icons) ? pet.possumLoot.icons : [];
+      if (pet.possumStole > 0) {
+        pet.possumLoot.trash += pet.possumStole;
+        if (!pet.possumLoot.icons.includes('🗑️')) pet.possumLoot.icons.push('🗑️');
+        pet.possumStole = 0;
+      }
+      return pet.possumLoot;
+    }
+
+    function hasPossumLoot() {
+      const loot = ensurePossumLoot();
+      const hasItems = Object.values(loot.items).some(c => c > 0);
+      return loot.trash > 0 || loot.caps > 0 || hasItems || loot.parts.length > 0;
+    }
+
+    function renderPossumLootBadge() {
+      const badge = document.getElementById('possumLootBadge');
+      if (!badge) return;
+      if (!hasPossumLoot()) {
+        badge.classList.add('hidden');
+        badge.classList.remove('flex');
+        badge.textContent = '';
+        return;
+      }
+      const loot = ensurePossumLoot();
+      const preview = loot.icons.slice(-4).join('');
+      const extraCount = Math.max(0, loot.icons.length - 4);
+      badge.textContent = `🐀${preview}${extraCount > 0 ? '+' + extraCount : ''}`;
+      badge.classList.remove('hidden');
+      badge.classList.add('flex');
+    }
+
+    function possumStealObject() {
+      if (!pet.isSleeping || pet.inMiniGame || isAnimatingThrow) return;
+      const loot = ensurePossumLoot();
+      pet.inventory = pet.inventory || {};
+      pet.palaceParts = pet.palaceParts || {};
+
+      // Build list of available theft targets from Jimothy's possessions
+      const candidates = [];
+
+      const ownedItems = Object.keys(pet.inventory).filter(k => pet.inventory[k] > 0 && ITEM_DB[k]);
+      if (ownedItems.length > 0) candidates.push('item', 'item');
+
+      const ownedParts = Object.keys(pet.palaceParts).filter(k => pet.palaceParts[k]);
+      if (ownedParts.length > 0) candidates.push('part', 'part');
+
+      if (pet.shinyCaps > 0) candidates.push('cap', 'cap');
+      if ((pet.trashCollected || 0) >= 5) candidates.push('trash');
+
+      const targetType = candidates.length > 0
+        ? candidates[Math.floor(Math.random() * candidates.length)]
+        : 'contraband';
+
+      let stolenIcon = '🗑️';
+      let stolenLabel = 'some trash';
+
+      if (targetType === 'item') {
+        const itemId = ownedItems[Math.floor(Math.random() * ownedItems.length)];
+        pet.inventory[itemId]--;
+        loot.items[itemId] = (loot.items[itemId] || 0) + 1;
+        stolenIcon = ITEM_DB[itemId].icon;
+        stolenLabel = ITEM_DB[itemId].name;
+      } else if (targetType === 'part') {
+        const partId = ownedParts[Math.floor(Math.random() * ownedParts.length)];
+        delete pet.palaceParts[partId];
+        if (!loot.parts.includes(partId)) loot.parts.push(partId);
+        const partMeta = (MARKET_CATALOG.palace || []).find(p => p.partId === partId);
+        stolenIcon = partMeta ? partMeta.icon : '📦';
+        stolenLabel = partMeta ? partMeta.name : 'Palace Part';
+        drawTrashPalace();
+      } else if (targetType === 'cap') {
+        pet.shinyCaps = Math.max(0, pet.shinyCaps - 1);
+        loot.caps += 1;
+        stolenIcon = '✨';
+        stolenLabel = 'a Shiny Cap';
+      } else if (targetType === 'trash') {
+        const amt = Math.min(pet.trashCollected, 15);
+        pet.trashCollected -= amt;
+        loot.trash += amt;
+        stolenIcon = '🗑️';
+        stolenLabel = `${Math.round(amt)} Palace Trash`;
+        drawTrashPalace();
+      } else {
+        const trinkets = [
+          { icon: '🥄', name: 'Jimothy\'s shiny spoon' },
+          { icon: '🥫', name: 'a prized tin can' },
+          { icon: '🧦', name: 'a soggy sock' }
+        ];
+        const trinket = trinkets[Math.floor(Math.random() * trinkets.length)];
+        loot.trash += 10;
+        stolenIcon = trinket.icon;
+        stolenLabel = trinket.name;
+      }
+
+      loot.icons.push(stolenIcon);
+      sound.scuttle();
+      showReaction(`🐀💨 STOLE ${stolenIcon}!`, 1800);
+      setLog(`Sneaky possum stole ${stolenLabel} while Jimothy slept!`);
+      renderPossumLootBadge();
+      if (isInventoryOpen) renderInventory();
+      if (isMarketOpen) renderMarket();
+      updateHUD();
+    }
+
+    function startPossumHeistTimer() {
+      stopPossumHeistTimer();
+      possumHeistTimeout = setTimeout(() => {
+        if (pet.isSleeping) possumStealObject();
+        possumHeistInterval = setInterval(() => {
+          if (pet.isSleeping) possumStealObject();
+        }, 7000);
+      }, 3800);
+    }
+
+    function stopPossumHeistTimer() {
+      if (possumHeistTimeout) { clearTimeout(possumHeistTimeout); possumHeistTimeout = null; }
+      if (possumHeistInterval) { clearInterval(possumHeistInterval); possumHeistInterval = null; }
+    }
+
+    function tossPossumCan() {
+      if (isAnimatingThrow) return;
+      isAnimatingThrow = true;
+
+      const loot = ensurePossumLoot();
+      const recoveredIcons = loot.icons.length > 0 ? loot.icons.slice(-5).join(' ') : '🗑️';
+
+      // Restore all stolen goods back to Jimothy
+      pet.inventory = pet.inventory || {};
+      Object.keys(loot.items).forEach(itemId => {
+        if (loot.items[itemId] > 0) {
+          pet.inventory[itemId] = (pet.inventory[itemId] || 0) + loot.items[itemId];
+        }
+      });
+
+      pet.palaceParts = pet.palaceParts || {};
+      loot.parts.forEach(partId => {
+        pet.palaceParts[partId] = true;
+      });
+
+      if (loot.caps > 0) {
+        pet.shinyCaps += loot.caps;
+      }
+      if (loot.trash > 0) {
+        pet.trashCollected = (pet.trashCollected || 0) + loot.trash;
+      }
+
+      // Clear possum's stolen stash
+      pet.possumLoot = { trash: 0, caps: 0, items: {}, parts: [], icons: [] };
+      pet.possumStole = 0;
+
+      showReaction("🤬 MY STUFF!", 1400);
+      setLog(`Jimothy woke up, YEETED the possum & retrieved: ${recoveredIcons}!`);
+      sound.hiss();
+
+      if (!pet.isSleeping) {
+        elements.graphic.classList.remove('idle-anim');
+        elements.graphic.classList.add('scurry-anim');
+      }
+
+      const possumEl = document.getElementById('possumPet');
+      possumEl.style.transition = 'transform 0.8s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.8s';
+      possumEl.style.transform = 'translate(120px, -80px) rotate(120deg) scale(0.5)';
+      possumEl.style.opacity = '0';
+
+      setTimeout(() => {
+        sound.thud();
+        sound.fanfare();
+        renderPossumLootBadge();
+        drawTrashPalace();
+        if (isInventoryOpen) renderInventory();
+        if (isMarketOpen) renderMarket();
+        updateHUD();
+        showReaction(`🎒 GOT BACK ${recoveredIcons}!`, 2200);
+      }, 800);
+
+      setTimeout(() => {
+        elements.graphic.classList.remove('scurry-anim');
+        updateBaseAnimation();
+      }, 1400);
+
+      setTimeout(() => {
+        possumEl.style.transition = 'none';
+        possumEl.style.transform = '';
+        possumEl.style.opacity = '1';
+        isAnimatingThrow = false;
+        updateBaseAnimation();
+      }, 5000);
+    }
+
+    function triggerRandomAntics() {
+      const events = [
+        { text: "Chewed through an HDMI cable!", chaos: +10 },
+        { text: "Broke into the mainframe!", hunger: +10, chaos: +12 },
+        { text: "Hacked the Pentagon using a half-eaten modem.", chaos: +25 },
+        { text: "Knocked over a virtual potted plant.", chaos: +12 },
+        { text: "Found a spicy battery!", item: 'battery', chaos: +5 },
+        { text: "Dug up some glow sludge.", item: 'sludge' },
+        { text: "Stole a rubber rat!", item: 'rat_toy' }
+      ];
+      const ev = events[Math.floor(Math.random() * events.length)];
+      if (ev.chaos) pet.chaos += ev.chaos;
+      if (ev.hunger) pet.hunger += ev.hunger;
+      
+      if (ev.item) {
+        pet.inventory = pet.inventory || {};
+        pet.inventory[ev.item] = (pet.inventory[ev.item] || 0) + 1;
+        showReaction(`+${ITEM_DB[ev.item].icon}`);
+      } else {
+        showReaction("👀 *CRASH!*");
+      }
+      
+      setLog(ev.text);
+      sound.beep();
+    }
+
+    let dreamInterval = null;
+    const dreamEmojis = ["🌭", "🚗", "🔪", "🍕", "💰", "👑", "🐀", "🗑️", "🍗", "🥪"];
+    const dreamTexts = [
+      "Dreaming of an infinite hotdog...",
+      "Dreaming of stealing a sports car...",
+      "Dreaming of knife fighting a possum...",
+      "Dreaming of a throne of pizza boxes...",
+      "Dreaming of tax evasion...",
+      "Dreaming of the perfect garbage bag...",
+      "Dreaming of chasing the neighbor's dog...",
+      "Dreaming of the holy grail of grease..."
+    ];
+
+    function cycleDreams() {
+      if (!pet.isSleeping) return;
+      document.getElementById('dreamIcon').textContent = dreamEmojis[Math.floor(Math.random() * dreamEmojis.length)];
+      setLog(dreamTexts[Math.floor(Math.random() * dreamTexts.length)]);
+    }
+
+    setInterval(() => {
+      pet.ageMinutes += 1;
+      if (pet.isSleeping) {
+        pet.energy = Math.min(100, pet.energy + 8);
+      } else {
+        pet.hunger = Math.max(0, pet.hunger - 2.5);
+        pet.chaos = Math.min(100, pet.chaos + 2);
+        pet.grease = Math.max(0, pet.grease - 1);
+        pet.energy = Math.max(0, pet.energy - 1.5);
+
+        if (pet.hunger < 20) {
+          notifier.send('hunger', 'Starvation Imminent! 🥫', 'Jimothy is chewing the drywall. Feed him some trash before he eats your router!', 120000);
+        } else if (pet.chaos > 85) {
+          notifier.send('chaos', 'Absolute Havoc! 🔥', 'Jimothy is going feral. You might want to check on him before he devours your fridge...', 120000);
+        }
+
+        if (pet.chaos >= 60 && pet.hunger < 50 && Math.random() < 0.4) {
+            if (!isAnimatingThrow) throwTrashAtScreen();
+        } else if (Math.random() < 0.25) {
+          triggerRandomAntics();
+        } else {
+          let didBuild = false;
+          let didRearrange = false;
+
+          if (pet.raidFrenzy > 0) {
+              pet.raidFrenzy--;
+              pet.trashCollected = (pet.trashCollected || 0) + 8;
+              didBuild = true;
+              if (Math.random() < 0.35) didRearrange = true;
+              if (Math.random() < 0.4) setLog("RAID FRENZY! Palace building accelerated!");
+          } else if (pet.hunger >= 20) {
+              pet.hunger -= 3;
+              pet.trashCollected = (pet.trashCollected || 0) + 2;
+              didBuild = true;
+              if (Math.random() < 0.15) didRearrange = true; 
+              if (Math.random() < 0.2) setLog("Jimothy spent some TRASH to upgrade his palace.");
+          } else {
+              pet.trashCollected = (pet.trashCollected || 0) + 0.2;
+              if (Math.random() < 0.2) setLog("Need more TRASH to build palace...");
+          }
+
+          if (didRearrange) {
+              pet.palaceSeed = Math.random();
+              setLog("Jimothy is frantically rearranging his trash!");
+          }
+
+          if (didBuild && !isAnimatingThrow && !pet.isSleeping && !pet.inMiniGame) {
+              if (Math.random() < 0.4 || didRearrange) {
+                  elements.graphic.classList.remove('idle-anim', 'chaos-anim');
+                  elements.graphic.classList.add('scurry-anim');
+                  sound.scuttle();
+                  
+                  setTimeout(() => {
+                      elements.graphic.classList.remove('scurry-anim');
+                      updateBaseAnimation();
+                  }, didRearrange ? 2500 : 1200); 
+              }
+          }
+          
+          drawTrashPalace();
+        }
+      }
+
+      if (!pet.isSleeping && hasPossumLoot() && !isAnimatingThrow && !pet.inMiniGame) {
+        tossPossumCan();
+      }
+
+      updateHUD();
+    }, 10000);
+
+    function toggleNap() {
+      if (pet.inMiniGame) return;
+      pet.isSleeping = !pet.isSleeping;
+      
+      const dreamBubble = document.getElementById('dreamBubble');
+      
+      if (pet.isSleeping) {
+        elements.graphic.classList.remove('idle-anim', 'chaos-anim');
+        elements.eyes.style.display = 'none';
+        elements.sleepZzz.style.display = 'block';
+        elements.hoboTent.style.display = 'block';
+        if (dreamBubble) {
+          dreamBubble.classList.remove('hidden');
+          dreamBubble.classList.add('flex');
+        }
+        showReaction("💤 Snoring...");
+        cycleDreams();
+        dreamInterval = setInterval(cycleDreams, 3500);
+        startPossumHeistTimer();
+        sound.beep();
+        updateHUD();
+      } else {
+        stopPossumHeistTimer();
+        updateBaseAnimation();
+        elements.eyes.style.display = 'block';
+        elements.sleepZzz.style.display = 'none';
+        elements.hoboTent.style.display = 'none';
+        if (dreamBubble) {
+          dreamBubble.classList.add('hidden');
+          dreamBubble.classList.remove('flex');
+        }
+        if (dreamInterval) clearInterval(dreamInterval);
+        showReaction("👀 Awake!");
+        setLog("Jimothy's eyes popped open.");
+        sound.beep();
+        updateHUD();
+
+        if (hasPossumLoot()) {
+          setTimeout(tossPossumCan, 900);
+        }
+      }
+    }
+
+    let miniGameInterval = null;
+    let miniGameTimerVal = 15;
+    let dogWaking = 0;
+    let cansTipped = 0;
+
+    function initMiniGame() {
+      if (pet.energy < 15) { showReaction("Too tired!"); sound.thud(); return; }
+      pet.inMiniGame = true;
+      miniGameTimerVal = 15;
+      cansTipped = 0;
+      dogWaking = 0;
+      document.getElementById('miniGameScreen').classList.remove('hidden');
+      document.getElementById('miniGameScreen').classList.add('flex');
+      document.getElementById('gameTitle').textContent = "MIDNIGHT RAID";
+      renderGameScreen();
+
+      miniGameInterval = setInterval(() => {
+        miniGameTimerVal--;
+        document.getElementById('gameTimer').textContent = `TIME: ${miniGameTimerVal}s`;
+        if (Math.random() > 0.45) dogWaking++;
+        renderGameScreen();
+
+        if (dogWaking >= 4) {
+          endMiniGame(false, "BARK! The neighbor's dog chased you away!");
+        } else if (miniGameTimerVal <= 0) {
+          endMiniGame(true, `Secured ${cansTipped} bins of trash!`);
+        }
+      }, 1000);
+    }
+
+    function renderGameScreen() {
+      const arena = document.getElementById('gameArena');
+      const dogIcons = ["😴 Zzz", "🐕 Stirring", "👀 Watching!", "🚨 BARKING!"];
+      arena.innerHTML = `
+        <div class="w-full h-full flex flex-col justify-between p-2" style="color: var(--lcd-pixel);">
+          <div class="flex justify-between text-[7px] font-bold">
+            <span>BINS: ${cansTipped}</span>
+            <span>${dogIcons[Math.min(3, dogWaking)]}</span>
+          </div>
+          <div class="flex items-center justify-around text-2xl py-1">
+            <span class="text-xl">🦝</span>
+            <span class="text-3xl animate-bounce">🗑️</span>
+            <span class="text-[7px] font-bold px-1 py-0.5 rounded border" style="border-color: var(--lcd-pixel);">
+              ${dogWaking > 1 ? "⚠️ HIDE (B)" : "LOOT (A)"}
+            </span>
+          </div>
+          <div class="w-full h-1.5 rounded overflow-hidden" style="background-color: var(--lcd-ui);">
+            <div class="h-full transition-all duration-300" style="background-color: var(--lcd-pixel); width: ${(dogWaking / 4) * 100}%;"></div>
+          </div>
+        </div>
+      `;
+    }
+
+    function miniGameHandleButton(btn) {
+      if (!pet.inMiniGame) return;
+      if (btn === 'A') {
+        if (dogWaking >= 3) {
+          sound.hiss();
+          dogWaking = 4; 
+          renderGameScreen();
+          endMiniGame(false, "BARK! The neighbor's dog chased you away!");
+          return;
+        } else {
+          sound.munch();
+          cansTipped++;
+          dogWaking = Math.min(3, dogWaking + 1);
+          
+          if (Math.random() > 0.8) {
+             const itemKeys = Object.keys(ITEM_DB);
+             const randomItem = itemKeys[Math.floor(Math.random() * itemKeys.length)];
+             pet.inventory = pet.inventory || {};
+             pet.inventory[randomItem] = (pet.inventory[randomItem] || 0) + 1;
+             showReaction(`Found ${ITEM_DB[randomItem].icon}!`);
+             sound.fanfare();
+          } else if (Math.random() > 0.85) {
+             pet.shinyCaps++;
+             showReaction("Found a CAP! ✨");
+             updateHUD();
+             sound.fanfare();
+          } else {
+             showReaction("Scavenging...");
+          }
+          
+          renderGameScreen();
+        }
+      } else if (btn === 'B') {
+        sound.scuttle();
+        dogWaking = Math.max(0, dogWaking - 1); 
+        renderGameScreen();
+      }
+    }
+
+    function endMiniGame(won, message) {
+      clearInterval(miniGameInterval);
+      pet.inMiniGame = false;
+      document.getElementById('miniGameScreen').classList.add('hidden');
+      document.getElementById('miniGameScreen').classList.remove('flex');
+      pet.energy -= 20;
+
+      if (won) {
+        sound.fanfare();
+        let loot = cansTipped * 15;
+        let bonusCaps = cansTipped > 0 ? Math.max(1, Math.floor(cansTipped / 2)) : 0;
+        pet.shinyCaps += bonusCaps;
+        pet.trashCollected = (pet.trashCollected || 0) + loot;
+        pet.hunger = Math.min(100, pet.hunger + (cansTipped * 8)); 
+        pet.raidFrenzy = 6; 
+        pet.chaos += 10;
+        pet.grease += 5;
+        showReaction(`👑 +${loot} TRASH! +${bonusCaps}✨`);
+        message = `Looted ${cansTipped} bins (+${bonusCaps} CAPS) & triggered a BUILD FRENZY!`;
+      } else {
+        document.getElementById('jimothyGraphic').classList.remove('idle-anim', 'chaos-anim');
+        document.getElementById('jimothyGraphic').classList.add('shake-anim');
+        setTimeout(() => { 
+            document.getElementById('jimothyGraphic').classList.remove('shake-anim'); 
+            updateBaseAnimation();
+        }, 700);
+        showReaction("💨 SCRAMBLED!");
+      }
+      setLog(message);
+      updateHUD();
+    }
+
+    function drawTrashPalace() {
+      const tc = pet.trashCollected || 0;
+      const parts = pet.palaceParts || {};
+      const g = document.getElementById('trashPalaceGroup');
+      if (!g) return;
+      
+      const seed = pet.palaceSeed || 0.5;
+      const offset1 = ((seed * 123) % 1) * 20; 
+      const offset2 = ((seed * 456) % 1) * 30 - 10; 
+      const offset3 = ((seed * 789) % 1) * 30 - 5; 
+      const offset4 = ((seed * 321) % 1) * 30 - 15; 
+      const offset5 = ((seed * 654) % 1) * 20 - 10; 
+
+      let html = '';
+
+      if (tc > 30 || parts.box) {
+        html += `<g transform="translate(${offset1}, 0)">
+                 <path d="M 5,65 L 5,45 L 30,45 L 30,65" fill="none" stroke-width="1.5" stroke="var(--lcd-pixel)"/>
+                 <line x1="5" y1="48" x2="30" y2="48" stroke-width="1" stroke="var(--lcd-pixel)"/>
+                 <text x="8" y="57" font-size="5" font-family="monospace" fill="var(--lcd-pixel)">FRAGILE</text>
+                 <path d="M 5,45 L 1,39 M 30,45 L 34,39" fill="none" stroke-width="1" stroke="var(--lcd-pixel)"/>
+                 </g>`;
+      }
+      if (tc > 90 || parts.cart) {
+        html += `<g transform="translate(${offset2}, 0)">
+                 <rect x="32" y="60" width="18" height="2" fill="none" stroke-width="1" stroke="var(--lcd-pixel)"/>
+                 <rect x="33" y="57" width="16" height="2" fill="none" stroke-width="1" stroke="var(--lcd-pixel)"/>
+                 <rect x="12" y="32" width="14" height="13" fill="none" stroke-width="1.5" stroke="var(--lcd-pixel)"/>
+                 <line x1="12" y1="36" x2="26" y2="36" stroke-width="0.5" stroke="var(--lcd-pixel)"/>
+                 <line x1="12" y1="40" x2="26" y2="40" stroke-width="0.5" stroke="var(--lcd-pixel)"/>
+                 <line x1="16" y1="32" x2="16" y2="45" stroke-width="0.5" stroke="var(--lcd-pixel)"/>
+                 <line x1="22" y1="32" x2="22" y2="45" stroke-width="0.5" stroke="var(--lcd-pixel)"/>
+                 </g>`;
+      }
+      if (parts.flamingo) {
+        html += `<g transform="translate(${offset1 * 0.5}, 0)">
+                 <line x1="78" y1="65" x2="78" y2="54" stroke-width="1" stroke="var(--lcd-pixel)"/>
+                 <path d="M 78,58 L 81,56 L 78,54" fill="none" stroke-width="0.8" stroke="var(--lcd-pixel)"/>
+                 <ellipse cx="78" cy="52" rx="4" ry="2.5" fill="var(--lcd-pixel)"/>
+                 <path d="M 81,51 Q 84,45 81,43 Q 79,43 79,45" fill="none" stroke-width="1.3" stroke="var(--lcd-pixel)"/>
+                 <polygon points="79,44 77,45 79,46" fill="var(--lcd-pixel)"/>
+                 </g>`;
+      }
+      if (tc > 180 || parts.tv) {
+        html += `<g transform="translate(${offset3}, 0)">
+                 <circle cx="45" cy="55" r="7" fill="none" stroke-width="2" stroke="var(--lcd-pixel)"/>
+                 <circle cx="45" cy="55" r="3" fill="none" stroke-width="1" stroke="var(--lcd-pixel)"/>
+                 <rect x="13" y="20" width="12" height="12" rx="1" fill="none" stroke-width="1.5" stroke="var(--lcd-pixel)"/>
+                 <rect x="15" y="22" width="8" height="8" rx="0.5" fill="none" stroke-width="1" stroke="var(--lcd-pixel)"/>
+                 <line x1="15" y1="20" x2="12" y2="15" stroke-width="1" stroke="var(--lcd-pixel)"/>
+                 <line x1="19" y1="20" x2="24" y2="14" stroke-width="1" stroke="var(--lcd-pixel)"/>
+                 </g>`;
+      }
+      if (tc > 300 || parts.flag) {
+        html += `<g transform="translate(${offset4}, 0)">
+                 <line x1="30" y1="45" x2="52" y2="65" stroke-width="1.5" stroke="var(--lcd-pixel)"/>
+                 <line x1="32" y1="44" x2="54" y2="64" stroke-width="1.5" stroke="var(--lcd-pixel)"/>
+                 <line x1="2" y1="45" x2="2" y2="15" stroke-width="1.5" stroke="var(--lcd-pixel)"/>
+                 <path d="M 2,15 Q 8,12 12,18 Q 8,22 2,20 Z" fill="none" stroke-width="1" stroke="var(--lcd-pixel)"/>
+                 <path d="M 3,16 Q 8,13 11,18 Q 8,21 3,19 Z" fill="var(--lcd-pixel)" opacity="0.3"/>
+                 </g>`;
+      }
+      if (parts.dish) {
+        html += `<g transform="translate(${offset2 * 0.4}, 0)">
+                 <line x1="58" y1="45" x2="55" y2="38" stroke-width="1.2" stroke="var(--lcd-pixel)"/>
+                 <line x1="58" y1="45" x2="61" y2="38" stroke-width="1.2" stroke="var(--lcd-pixel)"/>
+                 <path d="M 52,39 Q 58,43 64,35" fill="none" stroke-width="1.5" stroke="var(--lcd-pixel)"/>
+                 <line x1="58" y1="39" x2="61" y2="33" stroke-width="1" stroke="var(--lcd-pixel)"/>
+                 <circle cx="61.5" cy="32.5" r="1" fill="var(--lcd-pixel)" class="twinkle-anim"/>
+                 </g>`;
+      }
+      if (tc > 500 || parts.canopy) {
+        html += `<g transform="translate(${offset5}, 0)">
+                 <path d="M -5,10 Q 20,-5 45,10 Z" fill="none" stroke-width="1.5" stroke="var(--lcd-pixel)"/>
+                 <line x1="20" y1="10" x2="20" y2="20" stroke-width="1.5" stroke="var(--lcd-pixel)"/>
+                 <path d="M -5,10 Q 10,20 25,10 Q 35,18 45,10" fill="none" stroke-dasharray="1,4" stroke-width="2" stroke="var(--lcd-pixel)" class="flicker-anim"/>
+                 <polygon points="20,-2 22,2 26,2 23,5 24,9 20,7 16,9 17,5 14,2 18,2" fill="none" stroke-width="1" stroke="var(--lcd-pixel)" class="twinkle-anim"/>
+                 </g>`;
+      }
+
+      g.innerHTML = html;
+      g.style.opacity = '0.45'; 
+    }
+
+    btnMenu.addEventListener('click', () => {
+      if (isInventoryOpen) toggleInventory();
+      else if (isMarketOpen) toggleMarket();
+      else if (isAlleyLinkOpen) toggleAlleyLink();
+      else toggleMenu();
+    });
+
+    btnA.addEventListener('click', () => {
+      sound.beep();
+      if (isAlleyLinkOpen) {
+        executeAlleyAction();
+        return;
+      }
+      if (isMarketOpen) {
+        buyMarketSelection();
+        return;
+      }
+      if (isInventoryOpen) {
+        if (pet.isSleeping) {
+          sound.thud();
+          showReaction("💤 Sleeping!");
+          return;
+        }
+        if (invItems.length > 0) {
+          const itemId = invItems[invIndex];
+          ITEM_DB[itemId].use();
+          pet.inventory[itemId]--;
+          showReaction(`Used ${ITEM_DB[itemId].name}!`);
+          setLog(`Jimothy consumed ${ITEM_DB[itemId].name}.`);
+          renderInventory();
+          updateHUD();
+        } else {
+          sound.thud();
+        }
+        return;
+      }
+      if (isMenuOpen) {
+        executeMenuOption();
+        return;
+      }
+      if (pet.inMiniGame) {
+        miniGameHandleButton('A');
+        return;
+      }
+      if (pet.isSleeping) return;
+      const food = TRASH_MENU[currentFoodIdx];
+      currentFoodIdx = (currentFoodIdx + 1) % TRASH_MENU.length;
+      if (food.isGross) {
+        elements.graphic.classList.remove('idle-anim', 'chaos-anim');
+        elements.graphic.classList.add('shake-anim');
+        setTimeout(() => { elements.graphic.classList.remove('shake-anim'); updateBaseAnimation(); }, 700);
+        showReaction("🤮 GROSS!");
+        sound.hiss();
+      } else {
+        sound.munch();
+        showReaction(`*NOM* ${food.name}!`);
+      }
+      pet.hunger += food.hunger; pet.chaos += food.chaos; pet.grease += food.grease;
+      setLog(food.desc);
+      updateHUD();
+    });
+
+    btnB.addEventListener('click', () => {
+      sound.beep();
+      if (isAlleyLinkOpen) {
+        toggleAlleyLink();
+        return;
+      }
+      if (isMarketOpen) {
+        toggleMarket();
+        return;
+      }
+      if (isInventoryOpen) {
+        toggleInventory();
+        return;
+      }
+      if (isMenuOpen) {
+        toggleMenu(); 
+        return;
+      }
+      if (pet.inMiniGame) {
+        miniGameHandleButton('B');
+        return;
+      }
+      if (pet.isSleeping) return;
+      initMiniGame();
+    });
+
+    btnSelect.addEventListener('click', () => {
+      if (pet.inMiniGame || isMenuOpen || isInventoryOpen || isMarketOpen || isAlleyLinkOpen) return;
+      sound.beep();
+      toggleNap();
+    });
+    
+    btnStart.addEventListener('click', () => {
+      if (pet.inMiniGame || isMenuOpen || isInventoryOpen || isMarketOpen || isAlleyLinkOpen) return;
+      sound.scuttle();
+      if (pet.isSleeping) return;
+      pet.grease = Math.min(100, pet.grease + 25);
+      showReaction("✨ Fresh Grime!");
+      setLog("Coated Jimothy in warm, linty goodness.");
+      updateHUD();
+    });
+
+    const pokeAction = () => {
+       if (pet.isSleeping || pet.inMiniGame || isMenuOpen || isInventoryOpen || isMarketOpen || isAlleyLinkOpen) return;
+       sound.scuttle(); pet.chaos += 2;
+       showReaction("🐾 *GNAW!*"); setLog("Jimothy bit your finger.");
+       updateHUD();
+    };
+    elements.graphic.addEventListener('click', pokeAction);
+    
+    document.getElementById('dpadUp').addEventListener('click', () => {
+      if (isAlleyLinkOpen) {
+        sound.beep();
+        alleyActionIndex = Math.max(0, alleyActionIndex - 1);
+        renderAlleyLink();
+      } else if (isMarketOpen) {
+        sound.beep();
+        const items = MARKET_CATALOG[marketTab] || [];
+        marketIndex = Math.max(0, marketIndex - 1);
+        renderMarket();
+      } else if (isInventoryOpen) { if(invItems.length===0)return; sound.beep(); invIndex = Math.max(0, invIndex - 4); renderInventory(); }
+      else if (isMenuOpen) { sound.beep(); menuIndex = Math.max(0, menuIndex - 1); renderMenu(); } 
+      else pokeAction();
+    });
+    
+    document.getElementById('dpadDown').addEventListener('click', () => {
+      if (isAlleyLinkOpen) {
+        sound.beep();
+        alleyActionIndex = Math.min(ALLEY_ACTIONS.length - 1, alleyActionIndex + 1);
+        renderAlleyLink();
+      } else if (isMarketOpen) {
+        sound.beep();
+        const items = MARKET_CATALOG[marketTab] || [];
+        marketIndex = Math.min(items.length - 1, marketIndex + 1);
+        renderMarket();
+      } else if (isInventoryOpen) { if(invItems.length===0)return; sound.beep(); invIndex = Math.min(invItems.length - 1, invIndex + 4); renderInventory(); }
+      else if (isMenuOpen) { sound.beep(); menuIndex = Math.min(MENU_OPTIONS.length - 1, menuIndex + 1); renderMenu(); } 
+      else pokeAction();
+    });
+    
+    document.getElementById('dpadLeft').addEventListener('click', () => {
+      if (isMarketOpen) {
+        sound.beep();
+        marketTab = marketTab === 'trash' ? 'palace' : 'trash';
+        marketIndex = 0;
+        renderMarket();
+      } else if (isInventoryOpen) { if(invItems.length===0)return; sound.beep(); invIndex = Math.max(0, invIndex - 1); renderInventory(); }
+      else pokeAction();
+    });
+
+    document.getElementById('dpadRight').addEventListener('click', () => {
+      if (isMarketOpen) {
+        sound.beep();
+        marketTab = marketTab === 'trash' ? 'palace' : 'trash';
+        marketIndex = 0;
+        renderMarket();
+      } else if (isInventoryOpen) { if(invItems.length===0)return; sound.beep(); invIndex = Math.min(invItems.length - 1, invIndex + 1); renderInventory(); }
+      else pokeAction();
+    });
+
+    // Alley Link (Nearby Jimothy Local Network & Same-Device Multiplayer)
+    let isAlleyLinkOpen = false;
+    let alleyActionIndex = 0;
+    const ALLEY_ACTIONS = [
+      { id: 'wave', label: "👋 WAVE / HISS", desc: "Send a friendly hiss (+5% ENERGY)" },
+      { id: 'gift', label: "🎁 SEND TRASH GIFT (1✨)", desc: "Send 1 Cap + snack to nearby Jimothy" },
+      { id: 'tussle', label: "🥊 TRASH TUSSLE (CO-OP)", desc: "Co-op dumpster brawl! Both get +2✨ & +25 Trash" },
+      { id: 'code', label: "🔑 CHANGE ALLEY CODE", desc: "Set shared Wi-Fi / Room Code" },
+      { id: 'close', label: "❌ CLOSE", desc: "Return to alley" }
+    ];
+
+    class AlleyLinkManager {
+      constructor() {
+        this.clientId = 'jim-' + Math.random().toString(36).slice(2, 8);
+        this.roomCode = 'ALLEY-1';
+        try {
+          this.roomCode = (localStorage.getItem('jimothy_alley_code') || 'ALLEY-1').toUpperCase();
+        } catch(e) {}
+        this.peers = {}; // clientId -> { stage, ageMinutes, chaos, caps, lastSeen }
+        this.bc = null;
+        this.peer = null;
+        this.conns = {}; // peerId -> DataConnection
+        this.slotIndex = 0;
+        this.maxSlots = 4;
+
+        this.initBroadcastChannel();
+        this.initPeerJS();
+
+        setInterval(() => this.broadcastPresence(), 3000);
+        setInterval(() => this.prunePeers(), 4000);
+      }
+
+      getStageShort(stage) {
+        if (stage === 'emperor') return '👑 EMPEROR';
+        if (stage === 'goblin') return '🦝 GOBLIN';
+        if (stage === 'burglar') return '🦝 BURGLAR';
+        return '🦝 KIT';
+      }
+
+      initBroadcastChannel() {
+        if ('BroadcastChannel' in window) {
+          try {
+            if (this.bc) this.bc.close();
+            this.bc = new BroadcastChannel('jimothy_alley_' + this.roomCode);
+            this.bc.onmessage = (ev) => {
+              if (ev && ev.data) this.handleMessage(ev.data);
+            };
+          } catch(e) {}
+        }
+      }
+
+      getRoomSlotId(slot) {
+        const cleanCode = this.roomCode.replace(/[^A-Z0-9]/gi, '').toLowerCase() || 'alley1';
+        return `jimothy35-${cleanCode}-slot-${slot}`;
+      }
+
+      initPeerJS(trySlot = 0) {
+        if (typeof Peer === 'undefined') return;
+        try {
+          if (this.peer) {
+            this.peer.destroy();
+            this.peer = null;
+          }
+          this.conns = {};
+          this.slotIndex = trySlot;
+          const myPeerId = this.getRoomSlotId(trySlot);
+          const p = new Peer(myPeerId);
+
+          p.on('open', () => {
+            this.peer = p;
+            this.connectToOtherSlots();
+            this.broadcastPresence();
+          });
+
+          p.on('connection', (conn) => {
+            this.setupConn(conn);
+          });
+
+          p.on('error', (err) => {
+            if (err && err.type === 'unavailable-id' && trySlot + 1 < this.maxSlots) {
+              this.initPeerJS(trySlot + 1);
+            }
+          });
+        } catch(e) {}
+      }
+
+      connectToOtherSlots() {
+        if (!this.peer || !this.peer.open) return;
+        for (let s = 0; s < this.maxSlots; s++) {
+          if (s === this.slotIndex) continue;
+          const targetId = this.getRoomSlotId(s);
+          if (!this.conns[targetId]) {
+            try {
+              const conn = this.peer.connect(targetId, { reliable: true });
+              this.setupConn(conn);
+            } catch(e) {}
+          }
+        }
+      }
+
+      setupConn(conn) {
+        if (!conn) return;
+        conn.on('open', () => {
+          this.conns[conn.peer] = conn;
+          conn.send(this.makePacket('presence'));
+        });
+        conn.on('data', (data) => {
+          this.handleMessage(data);
+        });
+        conn.on('close', () => {
+          delete this.conns[conn.peer];
+        });
+        conn.on('error', () => {
+          delete this.conns[conn.peer];
+        });
+      }
+
+      makePacket(type, extra = {}) {
+        return {
+          type,
+          senderId: this.clientId,
+          roomCode: this.roomCode,
+          stage: pet.stage,
+          ageMinutes: pet.ageMinutes,
+          chaos: Math.round(pet.chaos),
+          caps: pet.shinyCaps,
+          ...extra
+        };
+      }
+
+      sendPacket(type, extra = {}) {
+        const pkt = this.makePacket(type, extra);
+        if (this.bc) {
+          try { this.bc.postMessage(pkt); } catch(e) {}
+        }
+        Object.values(this.conns).forEach(conn => {
+          if (conn && conn.open) {
+            try { conn.send(pkt); } catch(e) {}
+          }
+        });
+      }
+
+      broadcastPresence() {
+        this.sendPacket('presence');
+        if (this.peer && this.peer.open && Object.keys(this.conns).length === 0) {
+          this.connectToOtherSlots();
+        }
+      }
+
+      prunePeers() {
+        const now = Date.now();
+        let changed = false;
+        Object.keys(this.peers).forEach(id => {
+          if (now - this.peers[id].lastSeen > 11000) {
+            delete this.peers[id];
+            changed = true;
+          }
+        });
+        if (changed) this.updateVisitorUI();
+      }
+
+      getActivePeers() {
+        return Object.values(this.peers);
+      }
+
+      handleMessage(msg) {
+        if (!msg || msg.senderId === this.clientId || msg.roomCode !== this.roomCode) return;
+
+        const isNewPeer = !this.peers[msg.senderId];
+        this.peers[msg.senderId] = {
+          id: msg.senderId,
+          stage: msg.stage || 'kit',
+          ageMinutes: msg.ageMinutes || 1,
+          chaos: msg.chaos || 50,
+          caps: msg.caps || 0,
+          lastSeen: Date.now()
+        };
+
+        if (isNewPeer) {
+          sound.beep();
+          showReaction("📡 BUDDY LINKED!", 1800);
+          setLog(`Nearby Jimothy (${this.getStageShort(msg.stage)}) entered the alley!`);
+          this.sendPacket('presence');
+        }
+
+        this.updateVisitorUI();
+
+        if (msg.type === 'wave') {
+          sound.scuttle();
+          pet.energy = Math.min(100, pet.energy + 5);
+          this.animateVisitor('shake-anim', 700);
+          showReaction(`👋 ${this.getStageShort(msg.stage)} HISSED!`, 2000);
+          setLog(`Nearby Jimothy waved & hissed! (+5% ENERGY)`);
+          updateHUD();
+        } else if (msg.type === 'gift') {
+          sound.fanfare();
+          const itemKey = msg.itemKey && ITEM_DB[msg.itemKey] ? msg.itemKey : 'stale_pizza';
+          pet.inventory = pet.inventory || {};
+          pet.inventory[itemKey] = (pet.inventory[itemKey] || 0) + 1;
+          pet.shinyCaps += 1;
+          this.animateVisitor('scurry-anim', 1000);
+          showReaction(`🎁 GOT ${ITEM_DB[itemKey].icon}+1✨!`, 2200);
+          setLog(`Nearby Jimothy sent you ${ITEM_DB[itemKey].name} & 1 CAP!`);
+          if (isInventoryOpen) renderInventory();
+          updateHUD();
+        } else if (msg.type === 'tussle') {
+          this.triggerTussleEffects(false);
+        }
+      }
+
+      animateVisitor(cls, duration = 900) {
+        const v = document.getElementById('visitorRaccoon');
+        if (!v) return;
+        v.classList.remove('idle-anim', 'shake-anim', 'scurry-anim');
+        v.classList.add(cls);
+        setTimeout(() => {
+          v.classList.remove(cls);
+          v.classList.add('idle-anim');
+        }, duration);
+      }
+
+      triggerTussleEffects(isInitiator) {
+        sound.scuttle();
+        setTimeout(() => sound.fanfare(), 350);
+        pet.chaos = Math.min(100, pet.chaos + 12);
+        pet.grease = Math.min(100, pet.grease + 12);
+        pet.shinyCaps += 2;
+        pet.trashCollected = (pet.trashCollected || 0) + 25;
+
+        if (!pet.isSleeping && !isAnimatingThrow) {
+          elements.graphic.classList.remove('idle-anim');
+          elements.graphic.classList.add('scurry-anim');
+          setTimeout(() => {
+            elements.graphic.classList.remove('scurry-anim');
+            updateBaseAnimation();
+          }, 1200);
+        }
+        this.animateVisitor('scurry-anim', 1200);
+        drawTrashPalace();
+        showReaction("🥊 TUSSLE! +2✨", 2200);
+        setLog(isInitiator
+          ? "Tussled with nearby Jimothy! Both got +2 CAPS & +25 Trash!"
+          : "Nearby Jimothy started a Trash Tussle! +2 CAPS & +25 Trash!");
+        updateHUD();
+        if (isAlleyLinkOpen) renderAlleyLink();
+      }
+
+      updateVisitorUI() {
+        const list = this.getActivePeers();
+        const visitorEl = document.getElementById('visitorRaccoon');
+        const visitorTag = document.getElementById('visitorTag');
+        const visitorCrown = document.getElementById('visitorCrown');
+        const dotEl = document.getElementById('alleyLinkDot');
+
+        if (list.length > 0) {
+          const buddy = list[0];
+          if (visitorEl) {
+            visitorEl.classList.remove('hidden');
+            visitorEl.classList.add('flex');
+          }
+          if (visitorTag) visitorTag.textContent = this.getStageShort(buddy.stage);
+          if (visitorCrown) visitorCrown.style.display = buddy.stage === 'emperor' ? 'block' : 'none';
+          if (dotEl) dotEl.classList.remove('hidden');
+        } else {
+          if (visitorEl) {
+            visitorEl.classList.add('hidden');
+            visitorEl.classList.remove('flex');
+          }
+          if (dotEl) dotEl.classList.add('hidden');
+        }
+
+        if (isAlleyLinkOpen) renderAlleyLink();
+      }
+
+      changeRoomCode() {
+        const input = window.prompt("Enter shared Alley Link Code (devices on same code auto-connect):", this.roomCode);
+        if (!input) return;
+        this.roomCode = input.trim().toUpperCase().slice(0, 12) || 'ALLEY-1';
+        try {
+          localStorage.setItem('jimothy_alley_code', this.roomCode);
+        } catch(e) {}
+        this.peers = {};
+        this.initBroadcastChannel();
+        this.initPeerJS(0);
+        this.updateVisitorUI();
+        showReaction(`📡 ${this.roomCode}`, 1500);
+        setLog(`Switched Alley Link frequency to ${this.roomCode}.`);
+      }
+    }
+
+    const alleyLink = new AlleyLinkManager();
+
+    function renderAlleyLink() {
+      const badge = document.getElementById('alleyRoomBadge');
+      if (badge) badge.textContent = `CODE: ${alleyLink.roomCode}`;
+
+      const peers = alleyLink.getActivePeers();
+      const peerText = document.getElementById('alleyPeerText');
+      const peerCount = document.getElementById('alleyPeerCount');
+      if (peerCount) peerCount.textContent = `${peers.length} LINKED`;
+      if (peerText) {
+        if (peers.length > 0) {
+          const b = peers[0];
+          peerText.textContent = `NEARBY: ${alleyLink.getStageShort(b.stage)} (M:${b.ageMinutes} ✨${b.caps})`;
+        } else {
+          peerText.textContent = `SCANNING [${alleyLink.roomCode}]... OPEN ON 2ND DEVICE/TAB`;
+        }
+      }
+
+      const listEl = document.getElementById('alleyActionList');
+      if (!listEl) return;
+      listEl.innerHTML = '';
+
+      ALLEY_ACTIONS.forEach((act, idx) => {
+        const row = document.createElement('div');
+        const isSelected = idx === alleyActionIndex;
+        row.className = `p-1 rounded flex justify-between items-center cursor-pointer transition-colors duration-100`;
+        if (isSelected) {
+          row.style.backgroundColor = 'var(--lcd-pixel)';
+          row.style.color = 'var(--lcd-bg)';
+        } else {
+          row.style.color = 'var(--lcd-pixel)';
+        }
+        row.textContent = (isSelected ? '▶ ' : '  ') + act.label;
+        row.addEventListener('click', () => {
+          alleyActionIndex = idx;
+          renderAlleyLink();
+          executeAlleyAction();
+        });
+        listEl.appendChild(row);
+      });
+    }
+
+    function toggleAlleyLink() {
+      if (pet.inMiniGame) return;
+      isAlleyLinkOpen = !isAlleyLinkOpen;
+      const screen = document.getElementById('alleyLinkScreen');
+      if (isAlleyLinkOpen) {
+        alleyActionIndex = 0;
+        screen.classList.remove('hidden');
+        screen.classList.add('flex');
+        alleyLink.broadcastPresence();
+        renderAlleyLink();
+        sound.beep();
+      } else {
+        screen.classList.add('hidden');
+        screen.classList.remove('flex');
+        sound.beep();
+      }
+    }
+
+    function executeAlleyAction() {
+      const act = ALLEY_ACTIONS[alleyActionIndex];
+      if (!act) return;
+
+      if (act.id === 'close') {
+        toggleAlleyLink();
+        return;
+      }
+      if (act.id === 'code') {
+        alleyLink.changeRoomCode();
+        renderAlleyLink();
+        return;
+      }
+
+      const peers = alleyLink.getActivePeers();
+      if (peers.length === 0) {
+        sound.thud();
+        showReaction("NO BUDDY NEARBY!");
+        setLog(`No other Jimothy on code ${alleyLink.roomCode} yet. Open another tab or device!`);
+        return;
+      }
+
+      if (act.id === 'wave') {
+        alleyLink.sendPacket('wave');
+        sound.scuttle();
+        pet.energy = Math.min(100, pet.energy + 5);
+        alleyLink.animateVisitor('shake-anim', 700);
+        showReaction("👋 SENT HISS!");
+        setLog("Waved & hissed at your alley neighbor! (+5% ENERGY)");
+        updateHUD();
+        toggleAlleyLink();
+      } else if (act.id === 'gift') {
+        if (pet.shinyCaps < 1) {
+          sound.thud();
+          showReaction("NEED 1 CAP!");
+          setLog("You need at least 1 Shiny Cap to send a Trash Gift.");
+          return;
+        }
+        pet.shinyCaps -= 1;
+        const itemKeys = Object.keys(ITEM_DB);
+        const randomItem = itemKeys[Math.floor(Math.random() * itemKeys.length)];
+        alleyLink.sendPacket('gift', { itemKey: randomItem });
+        sound.fanfare();
+        showReaction(`🎁 SENT ${ITEM_DB[randomItem].icon}!`);
+        setLog(`Sent ${ITEM_DB[randomItem].name} & 1 CAP to nearby Jimothy!`);
+        updateHUD();
+        toggleAlleyLink();
+      } else if (act.id === 'tussle') {
+        alleyLink.sendPacket('tussle');
+        toggleAlleyLink();
+        alleyLink.triggerTussleEffects(true);
+      }
+    }
+
+    document.getElementById('alleyLinkBtn').addEventListener('click', () => {
+      if (isMenuOpen) toggleMenu();
+      if (isInventoryOpen) toggleInventory();
+      if (isMarketOpen) toggleMarket();
+      toggleAlleyLink();
+    });
+
+    document.getElementById('visitorRaccoon').addEventListener('click', () => {
+      if (pet.inMiniGame) return;
+      toggleAlleyLink();
+    });
+
+    // AR Camera Mode (Mobile & Desktop friendly with Front/Back Flip & Holo-Fallback)
+    let isARActive = false;
+    let arStream = null;
+    let arFacingMode = 'environment'; // 'environment' (back) | 'user' (front)
+
+    async function startARStream() {
+      const video = document.getElementById('arVideo');
+      const lcd = document.getElementById('lcdScreen');
+      const scenery = document.getElementById('staticSceneryGroup');
+      const flipBtn = document.getElementById('arFlipBtn');
+      const arBtn = document.getElementById('arToggleBtn');
+
+      if (arStream) {
+        arStream.getTracks().forEach(t => t.stop());
+        arStream = null;
+      }
+
+      lcd.classList.add('ar-active');
+      if (scenery) scenery.style.opacity = '0.04';
+      if (arBtn) arBtn.textContent = '🟢';
+
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        try {
+          try {
+            arStream = await navigator.mediaDevices.getUserMedia({
+              video: { facingMode: { ideal: arFacingMode }, width: { ideal: 1280 }, height: { ideal: 720 } },
+              audio: false
+            });
+          } catch (innerErr) {
+            arStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+          }
+
+          video.srcObject = arStream;
+          video.setAttribute('playsinline', '');
+          video.muted = true;
+          video.style.transform = arFacingMode === 'user' ? 'scaleX(-1)' : 'none';
+          video.classList.remove('hidden');
+          lcd.classList.remove('ar-sim-bg');
+          if (flipBtn) flipBtn.classList.remove('hidden');
+          await video.play();
+          showReaction("📷 AR LIVE!", 1600);
+          setLog("AR Mode ON! Jimothy is in the real world.");
+          return;
+        } catch (err) {
+          console.warn("AR Camera fallback activated:", err);
+        }
+      }
+
+      // Fallback if camera permission denied, no camera hardware, or file:// restriction
+      video.classList.add('hidden');
+      if (flipBtn) flipBtn.classList.add('hidden');
+      lcd.classList.add('ar-sim-bg');
+      showReaction("📷 HOLO AR!", 1800);
+      setLog("AR Holo-Grid active (Use HTTPS/localhost for live camera).");
+    }
+
+    function stopARStream() {
+      const video = document.getElementById('arVideo');
+      const lcd = document.getElementById('lcdScreen');
+      const scenery = document.getElementById('staticSceneryGroup');
+      const flipBtn = document.getElementById('arFlipBtn');
+      const arBtn = document.getElementById('arToggleBtn');
+
+      if (arStream) {
+        arStream.getTracks().forEach(t => t.stop());
+        arStream = null;
+      }
+      if (video) {
+        video.pause();
+        video.srcObject = null;
+        video.classList.add('hidden');
+      }
+      if (flipBtn) flipBtn.classList.add('hidden');
+      if (lcd) lcd.classList.remove('ar-active', 'ar-sim-bg');
+      if (scenery) scenery.style.opacity = '0.18';
+      if (arBtn) arBtn.textContent = '📷';
+      showReaction("📷 AR OFF", 1200);
+      setLog("Returned to standard LCD alley view.");
+    }
+
+    async function toggleARMode() {
+      sound.beep();
+      isARActive = !isARActive;
+      if (isARActive) {
+        await startARStream();
+      } else {
+        stopARStream();
+      }
+    }
+
+    document.getElementById('arToggleBtn').addEventListener('click', toggleARMode);
+
+    document.getElementById('arFlipBtn').addEventListener('click', async (e) => {
+      e.stopPropagation();
+      sound.beep();
+      arFacingMode = arFacingMode === 'environment' ? 'user' : 'environment';
+      if (isARActive) {
+        await startARStream();
+      }
+    });
+
+    // Mobile Touch Visual Responsiveness
+    ['btnA', 'btnB', 'btnSelect', 'btnStart', 'btnMenu', 'dpadUp', 'dpadDown', 'dpadLeft', 'dpadRight'].forEach(id => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.addEventListener('touchstart', () => {
+        el.classList.add('btn-pressed');
+      }, { passive: true });
+      const clearPress = () => el.classList.remove('btn-pressed');
+      el.addEventListener('touchend', clearPress, { passive: true });
+      el.addEventListener('touchcancel', clearPress, { passive: true });
+    });
+
+    document.getElementById('deviceToggleBtn').addEventListener('click', () => {
+      sound.beep(); prefs.shapeIdx = (prefs.shapeIdx + 1) % SHAPES.length; applyPrefs(); showReaction("📱 Shape Changed", 1000);
+    });
+    document.getElementById('colorToggleBtn').addEventListener('click', () => {
+      sound.beep(); prefs.themeIdx = (prefs.themeIdx + 1) % THEMES.length; applyPrefs(); showReaction(`🎨 ${THEMES[prefs.themeIdx].name} Theme`, 1000);
+    });
+    document.getElementById('lcdToggleBtn').addEventListener('click', () => {
+      sound.beep(); prefs.lcdIdx = (prefs.lcdIdx + 1) % LCD_STYLES.length; applyPrefs(); showReaction(`💡 ${LCD_STYLES[prefs.lcdIdx].name} LCD`, 1000);
+    });
+    
+    document.getElementById('webhookToggleBtn').addEventListener('click', () => {
+      sound.beep();
+      notifier.configureWebhook();
+    });
+    
+    document.getElementById('notifToggleBtn').addEventListener('click', async (e) => {
+      sound.beep();
+      const isEnabled = await notifier.toggle();
+      e.target.textContent = isEnabled ? '🔔' : '🔕';
+      showReaction(isEnabled ? "🔔 Notifs ON" : "🔕 Notifs OFF", 1500);
+    });
+
+    document.getElementById('soundToggleBtn').addEventListener('click', (e) => {
+      const isMuted = sound.toggleMute();
+      e.target.textContent = isMuted ? '🔇' : '🔊';
+      if (!isMuted) sound.beep();
+    });
+
+    function triggerButtonVisual(el) {
+      if (!el) return;
+      el.classList.add('btn-pressed');
+      clearTimeout(el._pressTimer);
+      el._pressTimer = setTimeout(() => el.classList.remove('btn-pressed'), 130);
+      el.click();
+    }
+
+    window.addEventListener('keydown', (e) => {
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) e.preventDefault();
+      if (e.key === 'ArrowUp') triggerButtonVisual(document.getElementById('dpadUp'));
+      if (e.key === 'ArrowDown') triggerButtonVisual(document.getElementById('dpadDown'));
+      if (e.key === 'ArrowLeft') triggerButtonVisual(document.getElementById('dpadLeft'));
+      if (e.key === 'ArrowRight') triggerButtonVisual(document.getElementById('dpadRight'));
+      if (e.key.toLowerCase() === 'a' || e.key === '1') triggerButtonVisual(btnA);
+      if (e.key.toLowerCase() === 'b' || e.key === '2') triggerButtonVisual(btnB);
+      if (e.key === 'Escape' || e.key.toLowerCase() === 'm') triggerButtonVisual(btnMenu);
+      if (e.key === 'Enter') triggerButtonVisual(btnStart);
+      if (e.key === 'Shift') triggerButtonVisual(btnSelect);
+    });
+
+    // HTML5 Gamepad / Controller Support
+    class GamepadController {
+      constructor() {
+        this.prevButtons = {};
+        this.dirHoldTime = { up: 0, down: 0, left: 0, right: 0 };
+        this.lastPoll = performance.now();
+        this.connectedCount = 0;
+        this.statusEl = document.getElementById('gamepadStatus');
+
+        window.addEventListener('gamepadconnected', (e) => {
+          this.updateStatus();
+          showReaction("🎮 PAD READY!", 1800);
+          setLog(`Controller connected: ${e.gamepad.id.split('(')[0].trim()}`);
+          sound.beep();
+        });
+
+        window.addEventListener('gamepaddisconnected', () => {
+          this.updateStatus();
+          showReaction("🎮 PAD OFF", 1500);
+          setLog("Controller disconnected.");
+        });
+
+        if (this.statusEl) {
+          this.statusEl.addEventListener('click', () => {
+            sound.beep();
+            showReaction(this.connectedCount > 0 ? "🎮 PAD ACTIVE" : "🎮 PRESS BTN", 1500);
+            setLog("Gamepad: [A]Feed/OK [B]Raid/Back [X]Menu [Y]Bag [Start]Lint [Select]Nap");
+          });
+        }
+
+        requestAnimationFrame((t) => this.poll(t));
+      }
+
+      updateStatus() {
+        if (!navigator.getGamepads) return;
+        const pads = Array.from(navigator.getGamepads() || []).filter(p => p && p.connected);
+        this.connectedCount = pads.length;
+        if (this.statusEl) {
+          this.statusEl.style.opacity = this.connectedCount > 0 ? '1' : '0.3';
+          this.statusEl.title = this.connectedCount > 0
+            ? `Controller Connected (${pads[0].id}) — [A]Feed [B]Raid [X]Menu [Y]Bag [Select]Nap [Start]Lint`
+            : 'Controller Disconnected (Press any controller button)';
+        }
+      }
+
+      isPressed(pad, idx) {
+        return !!(pad.buttons[idx] && (pad.buttons[idx].pressed || pad.buttons[idx].value > 0.5));
+      }
+
+      poll(now) {
+        const dt = now - this.lastPoll;
+        this.lastPoll = now;
+
+        if (navigator.getGamepads) {
+          const pads = navigator.getGamepads();
+          let activePad = null;
+          for (let i = 0; i < pads.length; i++) {
+            if (pads[i] && pads[i].connected) { activePad = pads[i]; break; }
+          }
+
+          if (activePad) {
+            if (this.connectedCount === 0) this.updateStatus();
+            const id = activePad.index;
+            const prev = this.prevButtons[id] || {};
+            const curr = {};
+
+            const checkEdge = (key, pressed, callback) => {
+              curr[key] = pressed;
+              if (pressed && !prev[key]) callback();
+            };
+
+            // Face & Center Buttons (Standard Gamepad Layout)
+            checkEdge('a', this.isPressed(activePad, 0), () => triggerButtonVisual(btnA));
+            checkEdge('b', this.isPressed(activePad, 1), () => triggerButtonVisual(btnB));
+            checkEdge('x', this.isPressed(activePad, 2), () => triggerButtonVisual(btnMenu));
+            checkEdge('y', this.isPressed(activePad, 3), () => {
+              if (pet.inMiniGame) return;
+              if (isMenuOpen) toggleMenu();
+              if (isMarketOpen) toggleMarket();
+              toggleInventory();
+            });
+            checkEdge('select', this.isPressed(activePad, 8), () => triggerButtonVisual(btnSelect));
+            checkEdge('start', this.isPressed(activePad, 9), () => triggerButtonVisual(btnStart));
+
+            // Shoulder / Trigger Shortcuts for Device & Theme Settings
+            checkEdge('lb', this.isPressed(activePad, 4), () => document.getElementById('colorToggleBtn').click());
+            checkEdge('rb', this.isPressed(activePad, 5), () => document.getElementById('lcdToggleBtn').click());
+            checkEdge('lt', this.isPressed(activePad, 6), () => document.getElementById('deviceToggleBtn').click());
+            checkEdge('rt', this.isPressed(activePad, 7), () => document.getElementById('soundToggleBtn').click());
+
+            // D-Pad + Left Analog Stick (with deadzone & hold-repeat for menus)
+            const axisX = activePad.axes && activePad.axes.length > 0 ? activePad.axes[0] : 0;
+            const axisY = activePad.axes && activePad.axes.length > 1 ? activePad.axes[1] : 0;
+            const DEADZONE = 0.5;
+
+            const dirs = {
+              up: this.isPressed(activePad, 12) || axisY < -DEADZONE,
+              down: this.isPressed(activePad, 13) || axisY > DEADZONE,
+              left: this.isPressed(activePad, 14) || axisX < -DEADZONE,
+              right: this.isPressed(activePad, 15) || axisX > DEADZONE
+            };
+
+            const dirButtons = {
+              up: document.getElementById('dpadUp'),
+              down: document.getElementById('dpadDown'),
+              left: document.getElementById('dpadLeft'),
+              right: document.getElementById('dpadRight')
+            };
+
+            ['up', 'down', 'left', 'right'].forEach((dir) => {
+              curr[dir] = dirs[dir];
+              if (dirs[dir]) {
+                if (!prev[dir]) {
+                  this.dirHoldTime[dir] = 0;
+                  triggerButtonVisual(dirButtons[dir]);
+                } else {
+                  this.dirHoldTime[dir] += dt;
+                  if (this.dirHoldTime[dir] >= 280) {
+                    this.dirHoldTime[dir] -= 140;
+                    triggerButtonVisual(dirButtons[dir]);
+                  }
+                }
+              } else {
+                this.dirHoldTime[dir] = 0;
+              }
+            });
+
+            this.prevButtons[id] = curr;
+          }
+        }
+
+        requestAnimationFrame((t) => this.poll(t));
+      }
+    }
+    const gamepadCtrl = new GamepadController();
+
+    loadPrefs();
+    loadState();
+    renderPossumLootBadge();
+    drawTrashPalace();
+    updateHUD();
+    
+    if (pet.isSleeping) {
+       elements.graphic.classList.remove('idle-anim', 'chaos-anim');
+       elements.eyes.style.display = 'none';
+       elements.sleepZzz.style.display = 'block';
+       elements.hoboTent.style.display = 'block';
+       const dreamBubble = document.getElementById('dreamBubble');
+       if (dreamBubble) {
+         dreamBubble.classList.remove('hidden');
+         dreamBubble.classList.add('flex');
+       }
+       cycleDreams();
+       dreamInterval = setInterval(cycleDreams, 3500);
+       startPossumHeistTimer();
+       setLog("Jimothy is fast asleep.");
+    }
+  </script>
+</body>
+</html>
